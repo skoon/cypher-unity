@@ -1,0 +1,16 @@
+{
+    "name": "Cypher.City",
+    "rootNamespace": "Cypher.City",
+    "references": [
+        "Cypher.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

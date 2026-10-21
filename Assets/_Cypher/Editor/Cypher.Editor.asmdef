@@ -1,0 +1,24 @@
+{
+    "name": "Cypher.Editor",
+    "rootNamespace": "Cypher.EditorTools",
+    "references": [
+        "Cypher.Core",
+        "Cypher.Capture",
+        "Cypher.City",
+        "Cypher.Player",
+        "Cypher.Rendering",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

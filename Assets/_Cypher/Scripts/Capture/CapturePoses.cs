@@ -1,0 +1,31 @@
+using UnityEngine;
+
+namespace Cypher.Capture
+{
+    /// <summary>Shared by the Editor entry point (SliceCapture) and the Play-mode driver.</summary>
+    public static class CapturePoses
+    {
+        public const string DirKey = "Cypher.Capture.Dir";
+        public const string ScreenHeightKey = "Cypher.Capture.ScreenHeight";
+
+        public struct Pose
+        {
+            public string Name;
+            public Vector3 Position;
+            public float Yaw, Pitch;
+        }
+
+        /// <summary>Camera poses in prototype coordinates (the city is mirrored in Unity's left-handed space).</summary>
+        public static readonly Pose[] All =
+        {
+            new Pose { Name = "spawn_north", Position = new Vector3(0f, 1.9f, 0f), Yaw = 0f, Pitch = 0f },
+            new Pose { Name = "spawn_east", Position = new Vector3(0f, 1.9f, 0f), Yaw = 90f, Pitch = 0f },
+            new Pose { Name = "street_level", Position = new Vector3(-8f, 1.7f, -60f), Yaw = 0f, Pitch = -2f },
+            new Pose { Name = "skyline", Position = new Vector3(-8f, 1.7f, -30f), Yaw = 30f, Pitch = 22f },
+            new Pose { Name = "overview", Position = new Vector3(-8f, 140f, -190f), Yaw = 0f, Pitch = 38f },
+            new Pose { Name = "north_close", Position = new Vector3(0f, 1.9f, 30f), Yaw = 0f, Pitch = 10f },
+            new Pose { Name = "north_mid", Position = new Vector3(0f, 1.9f, 12f), Yaw = 0f, Pitch = 12f },
+            new Pose { Name = "road_down", Position = new Vector3(0f, 1.7f, 31f), Yaw = 90f, Pitch = -12f },
+        };
+    }
+}
