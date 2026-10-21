@@ -5,6 +5,7 @@
         "Cypher.Core",
         "Cypher.Capture",
         "Cypher.City",
+        "Cypher.Perf",
         "Cypher.Player",
         "Cypher.Rendering",
         "Unity.RenderPipelines.Core.Runtime",

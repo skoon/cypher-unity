@@ -6,6 +6,7 @@
         "UnityEditor.TestRunner",
         "Cypher.Core",
         "Cypher.City",
+        "Cypher.Perf",
         "Cypher.Player",
         "Cypher.Rendering",
         "Unity.InputSystem",

@@ -8,5 +8,6 @@
   <Project Path="Cypher.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Cypher.Player.csproj" />
+  <Project Path="Cypher.Perf.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>

@@ -124,6 +124,23 @@ namespace Cypher.Tests
         }
 
         [UnityTest]
+        public IEnumerator SceneHasThePerfOverlayOnAndTheBenchmarkRunnerIdle()
+        {
+            yield return LoadSlice();
+            yield return null;
+
+            var overlay = Object.FindFirstObjectByType<Cypher.Perf.PerfOverlay>();
+            Assert.IsNotNull(overlay, "no PerfOverlay in the Slice scene");
+            Assert.IsTrue(overlay.Visible, "the overlay is on by default");
+            StringAssert.Contains("FPS", overlay.Text);
+
+            var runner = Object.FindFirstObjectByType<Cypher.Perf.BenchmarkRunner>();
+            Assert.IsNotNull(runner, "no BenchmarkRunner in the Slice scene");
+            Assert.IsFalse(runner.enabled, "the benchmark only runs with --benchmark");
+            Assert.IsNotInstanceOf<Cypher.Perf.PilotCommandSource>(Object.FindFirstObjectByType<FirstPersonController>().CommandSource);
+        }
+
+        [UnityTest]
         public IEnumerator PlayerStaysOnTheGroundForSeveralSeconds()
         {
             yield return LoadSlice();

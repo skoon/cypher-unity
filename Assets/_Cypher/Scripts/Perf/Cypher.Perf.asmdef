@@ -1,0 +1,20 @@
+{
+    "name": "Cypher.Perf",
+    "rootNamespace": "Cypher.Perf",
+    "references": [
+        "Cypher.Core",
+        "Cypher.City",
+        "Cypher.Player",
+        "Cypher.Rendering",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

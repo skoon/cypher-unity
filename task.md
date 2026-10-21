@@ -24,8 +24,13 @@
         tubes, lettered panels, bulbs, glow pools; the prototype's flicker and chase) and dark metal housings.
       - Rain: Core `RainModel` + `RainController` (one camera-following stretched-billboard particle system,
         3,000-particle cap at full intensity, 0.45 by default) + `Cypher/Rain`.
-- [~] 9. PerfStats + ResolutionScaler done and tested; PerfOverlay + --benchmark path not started
-- [ ] 10. Build player, measure, record in performance_results.md
+- [x] 9. Perf overlay and `--benchmark` (2026-10-20). Core: `PerfStats` (rolling window, nearest-rank percentiles),
+      `PerfOverlayText`, `BenchmarkOptions`, `BenchmarkPilot` (scripted walk of a 372 m loop), `BenchmarkRecorder` (CSV,
+      summary, p99 gate). Unity (`Cypher.Perf`): `PerfOverlay` (UI Toolkit, native resolution, on by default, F3 toggles),
+      `RenderCounters` (draw calls, triangles), `BenchmarkRunner`, `PilotCommandSource`. 321 EditMode + 71 PlayMode tests
+      pass; 254 in the fast loop.
+- [x] 10. Development player built and measured on the Vega 8 (2026-10-20): **passed**, p99 10.2 to 11.3 ms (gate 33.3),
+      about 130 FPS average at 1080p window / 540p internal. Details and caveats in `performance_results.md`.
 
 Also done ahead of schedule: `ResolutionScaler` (step 7 maths).
 
@@ -39,6 +44,9 @@ One command for everything (logs in `%TEMP%\cypher-unity`, a hung Unity is kille
     powershell -File tools/unity-check.ps1 -Step All                    # Build scene, EditMode, PlayMode
     powershell -File tools/unity-check.ps1 -Step Build|Edit|Play
     powershell -File tools/unity-check.ps1 -Step Capture -CaptureDir D:\shots -ScreenHeight 1080
+    powershell -File tools/unity-check.ps1 -Step Player       # Development player into Builds\Dev (about 7 min the first time)
+    powershell -File tools/unity-check.ps1 -Step Benchmark    # runs it with --benchmark at 1920x1080, prints the summary
+    powershell -File tools/unity-check.ps1 -Step Perf         # Player, then Benchmark
 
 PlayMode and Capture run with a graphics device (no `-nographics`): the reflection-probe tests skip without a GPU.
 The PlayMode tests need the scene built first (`-Step Build`, or `All`).
@@ -60,17 +68,33 @@ without it the output is the 960x540 internal image. Scene and materials come fr
 
 ## Project settings changed
 
+- `ProjectSettings/ProjectSettings.asset`: `enableFrameTimingStats` on (set by `PlayerBuilder` so the benchmark can read
+  CPU and GPU frame times).
+- `Assets/Settings/PC_RPAsset.asset`: **a player build rewrites its shader-stripping `m_Prefilter*` fields** (URP
+  derives them from what the project uses). The settings that matter (probe blending, box projection, Forward+) are
+  unchanged. Expect that diff after every player build.
 - `ProjectSettings/QualitySettings.asset`: **Realtime Reflection Probes turned on** for both quality levels (the URP
   template ships it off, which silently stops realtime probes rendering). `StreetReflectionProbe.Capture()` throws if
-  it is off. The URP asset itself is untouched (checked by hash): it already had probe blending, box projection and
-  the probe atlas on, in Forward+.
+  it is off. The URP asset already had probe blending, box projection and the probe atlas on, in Forward+; the game
+  and the capture tool never modify it (the runtime clone in `LowResController` is a copy).
+
+## Perf overlay and benchmark
+
+In the player (and the Editor) the overlay shows FPS with an OK / BELOW 30 verdict, frame time (average, worst, p99 of
+the last 5 s), draw calls and triangles; F3 hides it. Draw calls and triangles read 0 in the Editor and are real in a
+Development player; a release player reports n/a.
+
+`Cypher.exe --benchmark [--benchmark-out DIR] [--benchmark-seconds N] [--benchmark-warmup N]` (defaults 60 s after a
+10 s warm-up, results beside the exe in `benchmark\`) writes `benchmark.csv`, `benchmark_summary.txt`, `first_frame.png`
+and `last_frame.png`, and exits with 0 pass / 1 gate failed / 2 exception / 3 invalid run. Add Unity's own
+`-screen-width 1920 -screen-height 1080 -popupwindow` for a fixed window. The benchmark turns vsync off.
 
 ## Known limitations
 
 Rendering and look:
-- The first frame drawn right after `CityBuilder.Build()` rendered every wall as plain dark glass in the old
-  edit-mode capture until a second frame was drawn (atlas not uploaded yet, as far as I could tell). The new
-  Play-mode capture waits several frames so it cannot show this. Not yet checked in a player.
+- The first frame after `CityBuilder.Build()` rendered every wall as plain dark glass in the old edit-mode capture.
+  Checked in the Development player: the first frame (`first_frame.png`) is already correct, so this does not occur
+  there.
 - Neon "lettering" is procedural bars, not glyphs. Not ported: LED billboards, floating holograms, the pooled real
   point lights (light spill is additive glow pools plus bloom), glow cards.
 - Reflections come from one probe captured once from a fixed point: blurry, static, they do not flicker with the signs,
@@ -85,8 +109,11 @@ Rendering and look:
 
 Not ported from the web prototype: spires/masts, viaduct, tram rails, manholes, plaza props, balconies.
 
-Startup: textures are generated on the CPU at start (about 0.75 s in the Editor for everything). Step 10 should
-measure it in a player.
+Startup: textures and meshes are generated on the CPU at start. In the player the city build is 0.76 to 0.83 s and the
+first frame appears about 4.4 s after the process starts.
+
+Not verified: how mouse-look feels with a real mouse and display (the benchmark supplies look input directly), a
+release player, IL2CPP, other hardware, sessions beyond 160 s. See `performance_results.md`.
 
 ## Resolved blocker (2026-10-19 → 2026-10-20)
 

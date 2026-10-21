@@ -61,24 +61,35 @@ namespace Cypher.Core
         }
 
         /// <summary>99th percentile frame time in ms (nearest-rank).</summary>
-        public double P99Ms
+        public double P99Ms => PercentileMs(0.99);
+
+        /// <summary>Frame time in ms at <paramref name="fraction"/> (0..1] of the window, nearest-rank; 0 when empty.</summary>
+        public double PercentileMs(double fraction) => Percentile(_frames, fraction) * 1000.0;
+
+        /// <summary>Nearest-rank percentile of <paramref name="values"/> in their own unit; 0 when empty.</summary>
+        public static double Percentile(IEnumerable<double> values, double fraction)
         {
-            get
-            {
-                if (Count == 0) return 0;
-                double[] sorted = _frames.ToArray();
-                Array.Sort(sorted);
-                int rank = (int)Math.Ceiling(0.99 * sorted.Length);
-                return sorted[Math.Max(1, rank) - 1] * 1000.0;
-            }
+            if (!(fraction > 0 && fraction <= 1)) throw new ArgumentOutOfRangeException(nameof(fraction), fraction, "fraction must be in (0, 1]");
+            double[] sorted = new List<double>(values).ToArray();
+            if (sorted.Length == 0) return 0;
+            Array.Sort(sorted);
+            int rank = (int)Math.Ceiling(fraction * sorted.Length);
+            return sorted[Math.Max(1, rank) - 1];
         }
 
         /// <summary>True when p99 frame time is within the budget for <paramref name="floorFps"/>.</summary>
         public bool MeetsFloor(double floorFps = FloorFps)
         {
             if (!(floorFps > 0)) throw new ArgumentOutOfRangeException(nameof(floorFps));
+            return Count > 0 && WithinBudget(P99Ms, floorFps);
+        }
+
+        /// <summary>True when a frame time in ms fits the budget for <paramref name="floorFps"/>.</summary>
+        public static bool WithinBudget(double frameMs, double floorFps = FloorFps)
+        {
+            if (!(floorFps > 0)) throw new ArgumentOutOfRangeException(nameof(floorFps));
             // The epsilon absorbs float rounding at the boundary (1/30 s * 1000 vs 1000 / 30).
-            return Count > 0 && P99Ms <= 1000.0 / floorFps + 1e-9;
+            return frameMs <= 1000.0 / floorFps + 1e-9;
         }
     }
 }

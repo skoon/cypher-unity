@@ -43,6 +43,9 @@ namespace Cypher.Player
             set => autoTick = value;
         }
 
+        /// <summary>Radians of turn per look-input unit; scripted drivers need it to turn a wanted angle into input.</summary>
+        public float Sensitivity => sensitivity;
+
         public Transform CameraPivot
         {
             get => cameraPivot;

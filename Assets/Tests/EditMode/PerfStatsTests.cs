@@ -82,6 +82,44 @@ namespace Cypher.Tests
         }
 
         [Test]
+        public void PercentilesUseNearestRank()
+        {
+            var s = new PerfStats(100.0);
+            for (int i = 1; i <= 100; i++) s.AddFrame(i / 1000.0);   // 1 ms .. 100 ms
+            Assert.AreEqual(50.0, s.PercentileMs(0.5), 1e-9);
+            Assert.AreEqual(95.0, s.PercentileMs(0.95), 1e-9);
+            Assert.AreEqual(99.0, s.PercentileMs(0.99), 1e-9);
+            Assert.AreEqual(100.0, s.PercentileMs(1.0), 1e-9);
+            Assert.AreEqual(s.P99Ms, s.PercentileMs(0.99));
+            Assert.AreEqual(0.0, new PerfStats().PercentileMs(0.5));
+        }
+
+        [Test]
+        public void StaticPercentileWorksOnAnySequenceAndLeavesItAlone()
+        {
+            var values = new[] { 5.0, 1.0, 4.0, 2.0, 3.0 };
+            Assert.AreEqual(3.0, PerfStats.Percentile(values, 0.5));
+            Assert.AreEqual(5.0, PerfStats.Percentile(values, 1.0));
+            Assert.AreEqual(1.0, PerfStats.Percentile(values, 0.01));
+            Assert.AreEqual(new[] { 5.0, 1.0, 4.0, 2.0, 3.0 }, values, "the input is not sorted in place");
+            Assert.AreEqual(0.0, PerfStats.Percentile(new double[0], 0.99));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PerfStats.Percentile(values, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PerfStats.Percentile(values, 1.01));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PerfStats.Percentile(values, double.NaN));
+        }
+
+        [Test]
+        public void WithinBudgetIsInclusiveAtTheBoundary()
+        {
+            Assert.IsTrue(PerfStats.WithinBudget(1000.0 / 30.0));
+            Assert.IsTrue(PerfStats.WithinBudget(33.0));
+            Assert.IsFalse(PerfStats.WithinBudget(33.4));
+            Assert.IsTrue(PerfStats.WithinBudget(16.0, 60.0));
+            Assert.IsFalse(PerfStats.WithinBudget(17.0, 60.0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PerfStats.WithinBudget(10, 0));
+        }
+
+        [Test]
         public void ResetClearsEverything()
         {
             var s = new PerfStats();

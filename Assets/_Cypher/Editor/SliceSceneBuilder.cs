@@ -1,6 +1,7 @@
 using System.IO;
 using Cypher.City;
 using Cypher.Core;
+using Cypher.Perf;
 using Cypher.Player;
 using Cypher.Rendering;
 using UnityEditor;
@@ -67,6 +68,11 @@ namespace Cypher.EditorTools
                 new Vector3((float)extent.CentreX, 6f, (float)extent.CentreZ),
                 new Vector3((float)extent.Width + 40f, 80f, (float)extent.Depth + 40f),
                 StreetReflectionProbe.DefaultResolution, captureAutomatically: true);
+
+            // Perf overlay (F3) and the --benchmark mode; the runner does nothing unless the flag is on the command line.
+            var perf = new GameObject("Perf");
+            perf.AddComponent<PerfOverlay>();
+            perf.AddComponent<BenchmarkRunner>();
 
             EditorSceneManager.MarkSceneDirty(scene);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));

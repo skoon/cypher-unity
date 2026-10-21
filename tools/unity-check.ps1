@@ -4,21 +4,34 @@
 #   powershell -File tools/unity-check.ps1 -Step Edit
 #   powershell -File tools/unity-check.ps1 -Step Play
 #   powershell -File tools/unity-check.ps1 -Step Capture -CaptureDir D:\shots [-ScreenHeight 1080]
+#   powershell -File tools/unity-check.ps1 -Step Player      (Build scene, then a Windows Development player in Builds\Dev)
+#   powershell -File tools/unity-check.ps1 -Step Benchmark   (run that player with --benchmark, print the results)
+#   powershell -File tools/unity-check.ps1 -Step Perf        (Player, then Benchmark)
 #   powershell -File tools/unity-check.ps1 -Step All     (Build, Edit, Play; stops at the first failure)
 #
 # Close the Editor first if it has this project open. Logs go to $env:TEMP\cypher-unity.
 # Capture and PlayMode use the GPU (no -nographics); Build and EditMode run with -nographics.
+# Benchmark opens a borderless window of -Width x -Height for about warm-up + duration seconds; leave the machine alone meanwhile.
+# Exit codes of the player: 0 passed the 30 FPS gate, 1 failed it, 2 an exception, 3 invalid run (the character did not walk).
 param(
-    [ValidateSet('Build', 'Edit', 'Play', 'Capture', 'All')] [string]$Step = 'All',
+    [ValidateSet('Build', 'Edit', 'Play', 'Capture', 'Player', 'Benchmark', 'Perf', 'All')] [string]$Step = 'All',
     [string]$CaptureDir = '',
     [int]$ScreenHeight = 0,
     [int]$TimeoutSeconds = 420,
+    [string]$PlayerDir = '',
+    [string]$BenchmarkDir = '',
+    [int]$Width = 1920,
+    [int]$Height = 1080,
+    [int]$BenchmarkSeconds = 60,
+    [int]$WarmupSeconds = 10,
     [string]$Unity = 'D:\source\Unity\6000.6.6f1\Editor\Unity.exe'
 )
 $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $logs = Join-Path $env:TEMP 'cypher-unity'
 New-Item -ItemType Directory -Force $logs | Out-Null
+if (-not $PlayerDir) { $PlayerDir = Join-Path $project 'Builds\Dev' }
+if (-not $BenchmarkDir) { $BenchmarkDir = Join-Path $logs 'benchmark' }
 
 function Invoke-Unity([string[]]$UnityArgs, [string]$Log) {
     $p = Start-Process -FilePath $Unity -ArgumentList $UnityArgs -PassThru -NoNewWindow
@@ -74,12 +87,56 @@ function Step-Capture {
     return ($code -eq 0 -and $n -gt 0)
 }
 
+function Step-Player {
+    Write-Host '== Development player'
+    if (-not (Step-Build)) { return $false }
+    $exe = Join-Path $PlayerDir 'Cypher.exe'
+    $code = Invoke-Unity @('-batchmode', '-quit', '-projectPath', $project, '-executeMethod', 'Cypher.EditorTools.PlayerBuilder.BuildFromCommandLine', '-buildOutput', $exe, '-logFile', "$logs\player-build.log") "$logs\player-build.log"
+    Write-Host "  exit $code, $exe $(if (Test-Path $exe) { 'exists' } else { 'MISSING' })"
+    return ($code -eq 0 -and (Test-Path $exe))
+}
+
+function Quote([string]$Text) { if ($Text -match '\s') { return '"' + $Text + '"' } return $Text }
+
+function Step-Benchmark {
+    Write-Host "== Benchmark ($Width x $Height, $WarmupSeconds s warm-up + $BenchmarkSeconds s)"
+    $exe = Join-Path $PlayerDir 'Cypher.exe'
+    if (-not (Test-Path $exe)) { throw "No player at $exe; run -Step Player first" }
+    New-Item -ItemType Directory -Force $BenchmarkDir | Out-Null
+    $summary = Join-Path $BenchmarkDir 'benchmark_summary.txt'
+    $started = Get-Date
+
+    $a = @('-screen-width', $Width, '-screen-height', $Height, '-screen-fullscreen', 0, '-popupwindow',
+        '--benchmark', '--benchmark-out', (Quote $BenchmarkDir), '--benchmark-seconds', $BenchmarkSeconds, '--benchmark-warmup', $WarmupSeconds,
+        '-logFile', (Quote "$logs\player.log"))
+    $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru
+    $null = $p.Handle
+    if (-not $p.WaitForExit(($WarmupSeconds + $BenchmarkSeconds + 120) * 1000)) {
+        Write-Host "  TIMEOUT: killing the player (pid $($p.Id))"
+        & taskkill /PID $p.Id /T /F | Out-Null
+        return $false
+    }
+
+    # A summary older than this run means the player died before writing one.
+    if (-not (Test-Path $summary) -or (Get-Item $summary).LastWriteTime -lt $started) {
+        Write-Host "  exit $($p.ExitCode) and no fresh summary; see $logs\player.log"
+        return $false
+    }
+    Get-Content $summary | ForEach-Object { Write-Host "  $_" }
+    $reason = switch ($p.ExitCode) { 0 { 'passed the 30 FPS gate' } 1 { 'FAILED the 30 FPS gate' } 2 { 'an exception was thrown' } 3 { 'invalid run: the character did not walk' } default { 'unexpected exit' } }
+    Write-Host "  exit $($p.ExitCode): $reason. Results in $BenchmarkDir"
+    return ($p.ExitCode -eq 0)
+}
+
 $ok = $true
 switch ($Step) {
     'Build' { $ok = Step-Build }
     'Edit' { $ok = Step-Tests 'EditMode' }
     'Play' { $ok = Step-Tests 'PlayMode' }
     'Capture' { $ok = Step-Capture }
+    'Player' { $ok = Step-Player }
+    'Benchmark' { $ok = Step-Benchmark }
+    'Perf' { $ok = (Step-Player) -and (Step-Benchmark) }
     'All' { $ok = (Step-Build) -and (Step-Tests 'EditMode') -and (Step-Tests 'PlayMode') }
 }
 if ($ok) { Write-Host 'OK' } else { Write-Host 'FAILED'; exit 1 }
