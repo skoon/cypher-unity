@@ -2,6 +2,9 @@
     "name": "Cypher.Capture",
     "rootNamespace": "Cypher.Capture",
     "references": [
+        "Cypher.Core",
+        "Cypher.City",
+        "Cypher.Game",
         "Cypher.Player",
         "Cypher.Rendering"
     ],

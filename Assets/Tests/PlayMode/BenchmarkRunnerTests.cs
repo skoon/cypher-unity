@@ -12,6 +12,7 @@ namespace Cypher.Tests
     public class BenchmarkRunnerTests
     {
         PlayerTestRig _rig;
+        QualityRig _quality;
         GameObject _runnerGo;
         string _dir;
         int _savedVSync;
@@ -31,6 +32,8 @@ namespace Cypher.Tests
         public void TearDown()
         {
             if (_runnerGo) Object.DestroyImmediate(_runnerGo);
+            _quality?.Dispose();
+            _quality = null;
             _rig?.Dispose();
             _rig = null;
             if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
@@ -113,6 +116,50 @@ namespace Cypher.Tests
             Assert.AreEqual(1, QualitySettings.vSyncCount);
             Assert.AreEqual(60, Application.targetFrameRate);
             Assert.IsFalse(Application.runInBackground);
+        }
+
+        [UnityTest]
+        public IEnumerator PinsTheRequestedPresetAndTurnsAdaptiveOffWhileMeasuring()
+        {
+            _rig = new PlayerTestRig();
+            _rig.PlaceAndSettle(new Vector3(0f, (float)CityLayout.SidewalkHeight + 0.1f, 0f));
+            _quality = new QualityRig();
+            yield return null;
+            Assert.AreEqual(QualityPreset.Medium, _quality.Director.Preset);
+            Assert.IsTrue(_quality.Director.Adaptive);
+
+            MakeRunner(new BenchmarkOptions(true, _dir, 5, 5, QualityPreset.Low), _ => { });
+            yield return null;
+
+            Assert.AreEqual(QualityPreset.Low, _quality.Director.Preset);
+            Assert.IsFalse(_quality.Director.Adaptive, "adaptive quality would change the preset mid-run");
+            Assert.AreEqual(QualityTiers.For(QualityPreset.Low).InternalHeight, _quality.LowRes.TargetHeight);
+        }
+
+        [UnityTest]
+        public IEnumerator WithoutAPresetItKeepsTheScenePresetButStillTurnsAdaptiveOff()
+        {
+            _rig = new PlayerTestRig();
+            _rig.PlaceAndSettle(new Vector3(0f, (float)CityLayout.SidewalkHeight + 0.1f, 0f));
+            _quality = new QualityRig();
+            yield return null;
+
+            MakeRunner(new BenchmarkOptions(true, _dir, 5, 5), _ => { });
+            yield return null;
+
+            Assert.AreEqual(QualityPreset.Medium, _quality.Director.Preset);
+            Assert.IsFalse(_quality.Director.Adaptive);
+        }
+
+        [UnityTest]
+        public IEnumerator RequestingAPresetWithoutADirectorEndsWithTheExceptionCode()
+        {
+            _rig = new PlayerTestRig();
+            LogAssert.Expect(LogType.Exception, new Regex("needs a QualityDirector"));
+            int? exit = null;
+            MakeRunner(new BenchmarkOptions(true, _dir, 0.1, 0.5, QualityPreset.High), code => exit = code);
+            yield return null;
+            Assert.AreEqual(BenchmarkRunner.ExitException, exit);
         }
 
         [UnityTest]

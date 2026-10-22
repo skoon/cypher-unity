@@ -31,6 +31,40 @@ namespace Cypher.Tests
         }
     }
 
+    /// <summary>Plain materials with the city's real shaders, enough to build and walk the city in a test.</summary>
+    static class CityTestMaterials
+    {
+        public static CityMaterials Make(List<Object> owned, bool withProps = false)
+        {
+            Shader shader = Shader.Find("Cypher/CityLit");
+            Assert.IsNotNull(shader, "Cypher/CityLit shader not found");
+            Shader neonShader = Shader.Find("Cypher/NeonAdd");
+            Assert.IsNotNull(neonShader, "Cypher/NeonAdd shader not found");
+            Material M(Shader sh)
+            {
+                var m = new Material(sh);
+                owned.Add(m);
+                return m;
+            }
+            var mats = new CityMaterials { Walls = M(shader), Roofs = M(shader), Sidewalk = M(shader), Road = M(shader), Paint = M(shader), Metal = M(shader), Neon = M(neonShader) };
+            Shader boardShader = Shader.Find("Cypher/NeonBoard");
+            Assert.IsNotNull(boardShader, "Cypher/NeonBoard shader not found");
+            mats.Boards = M(boardShader);
+            mats.Holos = M(boardShader);
+            mats.Holos.SetFloat("_Holo", 1f);
+            if (!withProps) return mats;
+
+            Shader steamShader = Shader.Find("Cypher/Steam");
+            Assert.IsNotNull(steamShader, "Cypher/Steam shader not found");
+            mats.Props = M(shader);
+            mats.Props.SetFloat("_PropSurface", 1f);
+            mats.Decals = M(shader);
+            mats.Decals.SetFloat("_PropSurface", 2f);
+            mats.Steam = M(steamShader);
+            return mats;
+        }
+    }
+
     /// <summary>Builds the real city and a player on it. Everything made here is destroyed by Dispose.</summary>
     sealed class PlayerTestRig : System.IDisposable
     {
@@ -43,27 +77,15 @@ namespace Cypher.Tests
         public ScriptedInput Input { get; } = new ScriptedInput();
         public Transform CameraPivot { get; }
 
-        public PlayerTestRig()
+        /// <param name="windowRadius">1 is the 3x3 slice; 3 is the whole city, with its world edge.</param>
+        public PlayerTestRig(int windowRadius = 1, bool withProps = false)
         {
-            Shader shader = Shader.Find("Cypher/CityLit");
-            Assert.IsNotNull(shader, "Cypher/CityLit shader not found");
-            Material M()
-            {
-                var m = new Material(shader);
-                _owned.Add(m);
-                return m;
-            }
-
             // Inactive while configuring: CityBuilder builds in Awake, which must see its materials.
             var cityGo = new GameObject("TestCity");
             _owned.Add(cityGo);
             cityGo.SetActive(false);
             City = cityGo.AddComponent<CityBuilder>();
-            Shader neonShader = Shader.Find("Cypher/NeonAdd");
-            Assert.IsNotNull(neonShader, "Cypher/NeonAdd shader not found");
-            var neon = new Material(neonShader);
-            _owned.Add(neon);
-            City.Configure(CityPlan.DefaultSeed, 1, new CityMaterials { Walls = M(), Roofs = M(), Sidewalk = M(), Road = M(), Paint = M(), Metal = M(), Neon = neon });
+            City.Configure(CityPlan.DefaultSeed, windowRadius, CityTestMaterials.Make(_owned, withProps));
             cityGo.SetActive(true);
             Assert.IsNotNull(City.Slice, "Awake should have built the city");
 

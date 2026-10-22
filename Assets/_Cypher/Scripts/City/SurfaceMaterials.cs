@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Cypher.Core;
 using UnityEngine;
@@ -43,19 +44,45 @@ namespace Cypher.City
         static readonly int MaskMap = Shader.PropertyToID("_MaskMap");
         static readonly int EmissionMap = Shader.PropertyToID("_EmissionMap");
         static readonly int WorldUV = Shader.PropertyToID("_WorldUV");
+        static readonly int SignAtlas = Shader.PropertyToID("_SignAtlas");
+        static readonly int BoardAtlas = Shader.PropertyToID("_BoardAtlas");
+        static readonly int PanelInset = Shader.PropertyToID("_PanelInset");
+
+        /// <summary>Where <see cref="Steps"/> leaves its result.</summary>
+        public sealed class Result
+        {
+            public CityMaterials Materials;
+            public bool Done;
+        }
 
         /// <summary>Instances of the given materials with generated textures. Everything created is added to owned.</summary>
         public static CityMaterials Create(CityMaterials assets, int atlasSize, ICollection<UnityEngine.Object> owned)
         {
+            var result = new Result();
+            IEnumerator steps = Steps(assets, atlasSize, owned, result);
+            while (steps.MoveNext()) { }
+            return result.Materials;
+        }
+
+        /// <summary>
+        /// The same work as <see cref="Create"/> in pieces, one texture at a time, so a caller can spread it over frames. Each
+        /// yield is a good place to stop for the frame; <paramref name="result"/> is filled in when the enumerator finishes.
+        /// </summary>
+        public static IEnumerator Steps(CityMaterials assets, int atlasSize, ICollection<UnityEngine.Object> owned, Result result)
+        {
             if (!assets.IsComplete) throw new ArgumentException("all seven city materials are required", nameof(assets));
             if (owned == null) throw new ArgumentNullException(nameof(owned));
+            if (result == null) throw new ArgumentNullException(nameof(result));
 
             byte[] wetRoughness = SurfaceTextures.WetRoughness(WetRoughnessSize);
+            yield return null;
             Texture2D atlas = Own(owned, MakeTexture("WindowAtlas", WindowAtlas.Generate(atlasSize), atlasSize, srgb: true, aniso: 4));
+            yield return null;
             Texture2D concrete = Own(owned, MakeTexture("Concrete", SurfaceTextures.Concrete(ConcreteSize), ConcreteSize, srgb: true, aniso: 4));
             Texture2D concreteSmooth = Own(owned, MakeTexture("ConcreteSmoothness",
                 SurfaceTextures.SmoothnessFromRoughness(SurfaceTextures.ConcreteRoughness(ConcreteRoughnessSize), ConcreteRoughness),
                 ConcreteRoughnessSize, srgb: false, aniso: 4));
+            yield return null;
 
             Material walls = Instance(assets.Walls, owned);
             walls.SetTexture(EmissionMap, atlas);
@@ -69,6 +96,7 @@ namespace Cypher.City
             road.SetTexture(MaskMap, Own(owned, MakeTexture("RoadSmoothness",
                 SurfaceTextures.SmoothnessFromRoughness(wetRoughness, RoadRoughness), WetRoughnessSize, srgb: false, aniso: 8)));
             road.SetTextureScale(MaskMap, new Vector2(RoadMaskTiling, RoadMaskTiling));
+            yield return null;
 
             Material sidewalk = Instance(assets.Sidewalk, owned);
             sidewalk.SetTexture(BaseMap, Own(owned, MakeTexture("Paving", SurfaceTextures.Paving(PavingSize), PavingSize, srgb: true, aniso: 8)));
@@ -77,7 +105,8 @@ namespace Cypher.City
             sidewalk.SetTextureScale(MaskMap, new Vector2(SidewalkMaskTiling, SidewalkMaskTiling));
 
             // Paint, metal and neon take no generated textures, so the project's own materials are used as they are.
-            return new CityMaterials { Walls = walls, Roofs = roofs, Sidewalk = sidewalk, Road = road, Paint = assets.Paint, Metal = assets.Metal, Neon = assets.Neon };
+            result.Materials = new CityMaterials { Walls = walls, Roofs = roofs, Sidewalk = sidewalk, Road = road, Paint = assets.Paint, Metal = assets.Metal, Neon = assets.Neon };
+            result.Done = true;
         }
 
         static void ConfigureConcrete(Material material, Texture2D albedo, Texture2D smoothness)
@@ -103,21 +132,90 @@ namespace Cypher.City
         }
 
         /// <summary>RGBA32 texture from raw bytes with a full mip chain, trilinear and repeating.</summary>
-        public static Texture2D MakeTexture(string name, byte[] rgba, int size, bool srgb, int aniso)
+        public static Texture2D MakeTexture(string name, byte[] rgba, int size, bool srgb, int aniso) =>
+            MakeTexture(name, rgba, size, size, srgb, aniso, TextureWrapMode.Repeat);
+
+        /// <summary>RGBA32 texture of any size from raw bytes (row 0 at the bottom) with a full mip chain and trilinear filtering.</summary>
+        public static Texture2D MakeTexture(string name, byte[] rgba, int width, int height, bool srgb, int aniso, TextureWrapMode wrap)
         {
             if (rgba == null) throw new ArgumentNullException(nameof(rgba));
-            if (rgba.Length != size * size * 4) throw new ArgumentException($"{name}: {rgba.Length} bytes is not a {size}x{size} RGBA image", nameof(rgba));
+            if (rgba.Length != width * height * 4) throw new ArgumentException($"{name}: {rgba.Length} bytes is not a {width}x{height} RGBA image", nameof(rgba));
 
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true, !srgb)
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, true, !srgb)
             {
                 name = name,
-                wrapMode = TextureWrapMode.Repeat,
+                wrapMode = wrap,
                 filterMode = FilterMode.Trilinear,
                 anisoLevel = aniso,
             };
             texture.SetPixelData(rgba, 0);   // base level only; Apply generates the mip chain
             texture.Apply(true, true);
             return texture;
+        }
+
+        /// <summary>Single-channel texture (R8, linear) from raw bytes, row 0 at the bottom, with a full mip chain, trilinear and clamped.</summary>
+        public static Texture2D MakeMask(string name, byte[] bytes, int size, int aniso)
+        {
+            if (bytes == null) throw new ArgumentNullException(nameof(bytes));
+            if (bytes.Length != size * size) throw new ArgumentException($"{name}: {bytes.Length} bytes is not a {size}x{size} single-channel image", nameof(bytes));
+
+            var texture = new Texture2D(size, size, TextureFormat.R8, true, true)
+            {
+                name = name,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Trilinear,
+                anisoLevel = aniso,
+            };
+            texture.SetPixelData(bytes, 0);
+            texture.Apply(true, true);
+            return texture;
+        }
+
+        /// <summary>
+        /// Instances of the signage materials with their textures: the sign material gets the lettering atlas, the board materials (when the assets have them)
+        /// the ad panels and the panel inset the shader needs to find them. Everything created is added to owned.
+        /// </summary>
+        public static (Material neon, Material boards, Material holos) CreateSigns(CityMaterials assets, Texture2D lettering, Texture2D art, ICollection<UnityEngine.Object> owned)
+        {
+            if (!assets.Neon) throw new ArgumentException("the neon material is required", nameof(assets));
+            if (lettering == null) throw new ArgumentNullException(nameof(lettering));
+            if (art == null) throw new ArgumentNullException(nameof(art));
+            if (owned == null) throw new ArgumentNullException(nameof(owned));
+
+            Material neon = Instance(assets.Neon, owned);
+            neon.SetTexture(SignAtlas, lettering);
+            if (!assets.HasBoards) return (neon, null, null);
+
+            Material boards = Instance(assets.Boards, owned);
+            boards.SetTexture(BoardAtlas, art);
+            boards.SetFloat(PanelInset, (float)BoardArt.InsetFraction);
+            Material holos = Instance(assets.Holos, owned);
+            holos.SetTexture(BoardAtlas, art);
+            holos.SetFloat(PanelInset, (float)BoardArt.InsetFraction);
+            return (neon, boards, holos);
+        }
+
+        /// <summary>
+        /// Instances of the prop, decal and steam materials with the baked textures: the shared grime on the props, the graffiti-and-ground
+        /// atlas on the decals (clamped, so a tile's edge never wraps), the puff on the steam. Everything created is added to owned.
+        /// </summary>
+        public static (Material props, Material decals, Material steam) CreateProps(CityMaterials assets, PropBake bake, ICollection<UnityEngine.Object> owned)
+        {
+            if (!assets.HasProps) throw new ArgumentException("the props, decals and steam materials are required", nameof(assets));
+            if (bake == null) throw new ArgumentNullException(nameof(bake));
+            if (owned == null) throw new ArgumentNullException(nameof(owned));
+
+            Texture2D grime = Own(owned, MakeTexture("PropGrime", bake.Grime, PropTextures.GrimeSize, PropTextures.GrimeSize, srgb: true, aniso: 4, TextureWrapMode.Repeat));
+            Texture2D atlas = Own(owned, MakeTexture("DecalAtlas", bake.DecalAtlas, PropTextures.DecalAtlasWidth, PropTextures.DecalAtlasHeight, srgb: true, aniso: 4, TextureWrapMode.Clamp));
+            Texture2D puff = Own(owned, MakeTexture("SteamPuff", bake.Puff, PropTextures.PuffSize, PropTextures.PuffSize, srgb: true, aniso: 1, TextureWrapMode.Clamp));
+
+            Material props = Instance(assets.Props, owned);
+            props.SetTexture(BaseMap, grime);
+            Material decals = Instance(assets.Decals, owned);
+            decals.SetTexture(BaseMap, atlas);
+            Material steam = Instance(assets.Steam, owned);
+            steam.SetTexture(BaseMap, puff);
+            return (props, decals, steam);
         }
     }
 }

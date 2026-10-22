@@ -42,6 +42,21 @@ namespace Cypher.Rendering
             }
         }
 
+        /// <summary>Most streaks alive at once at full intensity; the quality preset sets it.</summary>
+        public int MaxParticles
+        {
+            get => maxParticles;
+            set
+            {
+                if (value < 100) throw new ArgumentOutOfRangeException(nameof(value), value, "cap must be at least 100");
+                maxParticles = value;
+                if (_system == null) return;
+                ParticleSystem.MainModule main = _system.main;
+                main.maxParticles = value;
+                ApplyEmission();
+            }
+        }
+
         /// <summary>Master switch. Off stops new streaks; the ones already falling finish and clear.</summary>
         public bool Raining
         {

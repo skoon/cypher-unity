@@ -7,14 +7,18 @@
 #   powershell -File tools/unity-check.ps1 -Step Player      (Build scene, then a Windows Development player in Builds\Dev)
 #   powershell -File tools/unity-check.ps1 -Step Benchmark   (run that player with --benchmark, print the results)
 #   powershell -File tools/unity-check.ps1 -Step Perf        (Player, then Benchmark)
+#   powershell -File tools/unity-check.ps1 -Step Shots       (run that player with --shots: a screenshot of every menu screen)
 #   powershell -File tools/unity-check.ps1 -Step All     (Build, Edit, Play; stops at the first failure)
 #
 # Close the Editor first if it has this project open. Logs go to $env:TEMP\cypher-unity.
 # Capture and PlayMode use the GPU (no -nographics); Build and EditMode run with -nographics.
+# Edit and Play accept -TestFilter <semicolon-separated names or patterns> to run only some tests, e.g. -TestFilter Cypher.Tests.UiScreenTests
+# Benchmark -Quality Performance|Low|Medium|High|Ultra pins that preset (adaptive quality is always off in a benchmark).
+# Benchmark -Route centre|city picks the loop (centre is the M1 loop round the plaza; city tours every edge: use -BenchmarkSeconds 240).
 # Benchmark opens a borderless window of -Width x -Height for about warm-up + duration seconds; leave the machine alone meanwhile.
 # Exit codes of the player: 0 passed the 30 FPS gate, 1 failed it, 2 an exception, 3 invalid run (the character did not walk).
 param(
-    [ValidateSet('Build', 'Edit', 'Play', 'Capture', 'Player', 'Benchmark', 'Perf', 'All')] [string]$Step = 'All',
+    [ValidateSet('Build', 'Edit', 'Play', 'Capture', 'Player', 'Benchmark', 'Perf', 'Shots', 'All')] [string]$Step = 'All',
     [string]$CaptureDir = '',
     [int]$ScreenHeight = 0,
     [int]$TimeoutSeconds = 420,
@@ -24,6 +28,10 @@ param(
     [int]$Height = 1080,
     [int]$BenchmarkSeconds = 60,
     [int]$WarmupSeconds = 10,
+    [string]$Quality = '',
+    [string]$Route = '',
+    [string]$TestFilter = '',
+    [string]$ShotsDir = '',
     [string]$Unity = 'D:\source\Unity\6000.6.6f1\Editor\Unity.exe'
 )
 $ErrorActionPreference = 'Stop'
@@ -32,6 +40,7 @@ $logs = Join-Path $env:TEMP 'cypher-unity'
 New-Item -ItemType Directory -Force $logs | Out-Null
 if (-not $PlayerDir) { $PlayerDir = Join-Path $project 'Builds\Dev' }
 if (-not $BenchmarkDir) { $BenchmarkDir = Join-Path $logs 'benchmark' }
+if (-not $ShotsDir) { $ShotsDir = Join-Path $logs 'shots' }
 
 function Invoke-Unity([string[]]$UnityArgs, [string]$Log) {
     $p = Start-Process -FilePath $Unity -ArgumentList $UnityArgs -PassThru -NoNewWindow
@@ -72,6 +81,7 @@ function Step-Tests([string]$Mode) {
     # PlayMode runs with a graphics device: reflection probes and other render tests skip without one.
     $a = @('-batchmode', '-projectPath', $project, '-runTests', '-testPlatform', $Mode, '-testResults', $xml, '-logFile', "$logs\$Mode.log")
     if ($Mode -eq 'EditMode') { $a += '-nographics' }
+    if ($TestFilter) { $a += @('-testFilter', $TestFilter) }
     $code = Invoke-Unity $a "$logs\$Mode.log"
     return ((Show-Results $xml) -and $code -eq 0)
 }
@@ -99,7 +109,7 @@ function Step-Player {
 function Quote([string]$Text) { if ($Text -match '\s') { return '"' + $Text + '"' } return $Text }
 
 function Step-Benchmark {
-    Write-Host "== Benchmark ($Width x $Height, $WarmupSeconds s warm-up + $BenchmarkSeconds s)"
+    Write-Host "== Benchmark ($Width x $Height, $WarmupSeconds s warm-up + $BenchmarkSeconds s$(if ($Quality) { ", $Quality" })$(if ($Route) { ", $Route route" }))"
     $exe = Join-Path $PlayerDir 'Cypher.exe'
     if (-not (Test-Path $exe)) { throw "No player at $exe; run -Step Player first" }
     New-Item -ItemType Directory -Force $BenchmarkDir | Out-Null
@@ -109,6 +119,8 @@ function Step-Benchmark {
     $a = @('-screen-width', $Width, '-screen-height', $Height, '-screen-fullscreen', 0, '-popupwindow',
         '--benchmark', '--benchmark-out', (Quote $BenchmarkDir), '--benchmark-seconds', $BenchmarkSeconds, '--benchmark-warmup', $WarmupSeconds,
         '-logFile', (Quote "$logs\player.log"))
+    if ($Quality) { $a += @('--benchmark-quality', $Quality) }
+    if ($Route) { $a += @('--benchmark-route', $Route) }
     $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru
     $null = $p.Handle
     if (-not $p.WaitForExit(($WarmupSeconds + $BenchmarkSeconds + 120) * 1000)) {
@@ -128,6 +140,29 @@ function Step-Benchmark {
     return ($p.ExitCode -eq 0)
 }
 
+function Step-Shots {
+    Write-Host "== Menu screenshots ($Width x $Height)"
+    $exe = Join-Path $PlayerDir 'Cypher.exe'
+    if (-not (Test-Path $exe)) { throw "No player at $exe; run -Step Player first" }
+    New-Item -ItemType Directory -Force $ShotsDir | Out-Null
+    $list = Join-Path $ShotsDir 'shots.txt'
+    Remove-Item $list -ErrorAction SilentlyContinue   # the walk writes it last, so its presence means it finished
+
+    $a = @('-screen-width', $Width, '-screen-height', $Height, '-screen-fullscreen', 0, '-popupwindow',
+        '--shots', (Quote $ShotsDir), '-logFile', (Quote "$logs\shots.log"))
+    $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru
+    $null = $p.Handle
+    if (-not $p.WaitForExit(240 * 1000)) {
+        Write-Host "  TIMEOUT: killing the player (pid $($p.Id))"
+        & taskkill /PID $p.Id /T /F | Out-Null
+        return $false
+    }
+    if (-not (Test-Path $list)) { Write-Host "  exit $($p.ExitCode) and the walk did not finish; see $logs\shots.log"; return $false }
+    Get-Content $list | ForEach-Object { Write-Host "  $_" }
+    Write-Host "  exit $($p.ExitCode). Screenshots in $ShotsDir"
+    return ($p.ExitCode -eq 0)
+}
+
 $ok = $true
 switch ($Step) {
     'Build' { $ok = Step-Build }
@@ -136,6 +171,7 @@ switch ($Step) {
     'Capture' { $ok = Step-Capture }
     'Player' { $ok = Step-Player }
     'Benchmark' { $ok = Step-Benchmark }
+    'Shots' { $ok = Step-Shots }
     'Perf' { $ok = (Step-Player) -and (Step-Benchmark) }
     'All' { $ok = (Step-Build) -and (Step-Tests 'EditMode') -and (Step-Tests 'PlayMode') }
 }

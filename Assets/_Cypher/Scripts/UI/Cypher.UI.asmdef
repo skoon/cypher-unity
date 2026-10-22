@@ -1,0 +1,20 @@
+{
+    "name": "Cypher.UI",
+    "rootNamespace": "Cypher.UI",
+    "references": [
+        "Cypher.Core",
+        "Cypher.Game",
+        "Cypher.Player",
+        "Cypher.Perf",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

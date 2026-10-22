@@ -37,6 +37,9 @@ namespace Cypher.Player
         /// <summary>Where commands come from. Defaults to keyboard, mouse and gamepad.</summary>
         public IPlayerCommandSource CommandSource { get; set; }
 
+        /// <summary>The player's keyboard, mouse and gamepad controls for the default command source; null means the defaults.</summary>
+        public InputBindings Bindings { get; set; }
+
         public bool AutoTick
         {
             get => autoTick;
@@ -45,6 +48,16 @@ namespace Cypher.Player
 
         /// <summary>Radians of turn per look-input unit; scripted drivers need it to turn a wanted angle into input.</summary>
         public float Sensitivity => sensitivity;
+
+        public bool InvertY => invertY;
+
+        /// <summary>Take the player's look settings (sensitivity multiplier and invert-Y) from the Options.</summary>
+        public void ApplyGameplay(GameplayOptions gameplay)
+        {
+            if (gameplay == null) throw new ArgumentNullException(nameof(gameplay));
+            sensitivity = (float)gameplay.LookSensitivity;
+            invertY = gameplay.InvertY;
+        }
 
         public Transform CameraPivot
         {
@@ -64,7 +77,7 @@ namespace Cypher.Player
             if (!Application.isPlaying) return;
             if (CommandSource == null)
             {
-                _ownedSource = new InputSystemCommandSource();
+                _ownedSource = new InputSystemCommandSource(Bindings ?? new InputBindings());
                 CommandSource = _ownedSource;
             }
             if (lockCursor)
@@ -84,7 +97,10 @@ namespace Cypher.Player
 
         void Update()
         {
-            if (autoTick) Tick(Time.deltaTime);
+            // A frame that took no time has nothing to simulate. It happens on the first frame after unpausing, when the controller is
+            // switched on in a frame whose delta was already fixed at zero. An explicit Tick with a bad dt still throws.
+            float dt = Time.deltaTime;
+            if (autoTick && dt > 0f) Tick(dt);
         }
 
         /// <summary>Advance the player by one frame: read input, move, update camera.</summary>

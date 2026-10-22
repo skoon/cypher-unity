@@ -1,13 +1,15 @@
-// Additive emissive signage: glass tubes, backlit panels with procedural lettering bars, marquee bulbs and
-// soft glow pools, all drawn procedurally from per-quad parameters baked into the mesh, so one material
-// and a handful of draw calls cover every sign. Port of the prototype's sign shader (Neon.js), minus the
-// glyph atlas. Vertex colour = linear tint. TEXCOORD1 = (seed, flicker mode + 8 * shape, extra, gain),
-// where extra is chase segments (tubes), aspect (panels) or bulb count (bulbs). See Core.NeonMesher.
+// Additive emissive signage: glass tubes, backlit lettered panels, marquee bulbs and soft glow pools, drawn
+// from per-quad parameters baked into the mesh, so one material and a handful of draw calls cover every
+// sign. Port of the prototype's sign shader (Neon.js). The lettering of a panel is read from the sign atlas
+// (Core.NeonAtlas): its quad's TEXCOORD0 are atlas coordinates, not 0..1 across the quad. Vertex colour =
+// linear tint. TEXCOORD1 = (seed, flicker mode + 8 * shape, extra, gain), where extra is chase segments
+// (tubes), aspect (panels) or bulb count (bulbs). See Core.NeonMesher.
 Shader "Cypher/NeonAdd"
 {
     Properties
     {
         _Brightness("Brightness", Range(0.0, 4.0)) = 1.0
+        _SignAtlas("Sign atlas (lettering mask)", 2D) = "black" {}
     }
 
     SubShader
@@ -35,6 +37,9 @@ Shader "Cypher/NeonAdd"
             CBUFFER_START(UnityPerMaterial)
             half _Brightness;
             CBUFFER_END
+
+            TEXTURE2D(_SignAtlas);
+            SAMPLER(sampler_SignAtlas);
 
             struct Attributes
             {
@@ -105,31 +110,6 @@ Shader "Cypher/NeonAdd"
                 return hum * (0.45 + 0.55 * step(0.25, s2));
             }
 
-            // Backlit sign face. Lettering is faked with a grid of cells, each holding strokes chosen by a
-            // hash: it reads as signage at street distance without needing a glyph atlas.
-            float PanelPattern(float2 uv, float aspect, float seed)
-            {
-                float cols = clamp(floor(aspect * 3.5), 1.0, 24.0);
-                float rows = clamp(floor(3.5 / max(aspect, 0.05)), 1.0, 24.0);
-                float2 grid = uv * float2(cols, rows);
-                float2 cell = floor(grid);
-                float2 f = frac(grid);
-
-                float h = H21(cell + seed * 13.7);
-                float h2 = H21(cell.yx + seed * 7.3 + 17.0);
-                float glyph = step(0.22, h);   // some cells stay empty, like spaces
-
-                float vBar = step(abs(f.x - (h2 < 0.5 ? 0.3 : 0.7)), 0.09) * step(abs(f.y - 0.5), 0.38);
-                float vMid = step(abs(f.x - 0.5), 0.09) * step(abs(f.y - 0.5), 0.38) * step(0.5, frac(h2 * 7.1));
-                float hBar = step(abs(f.y - (frac(h2 * 3.7) * 0.5 + 0.25)), 0.08) * step(abs(f.x - 0.5), 0.34);
-                float strokes = saturate(vBar + vMid + hBar) * glyph;
-
-                float2 edge = min(uv, 1.0 - uv) * float2(aspect, 1.0);   // distance to the border, in sign-height units
-                float frame = step(min(edge.x, edge.y), 0.045);
-
-                return saturate(0.30 + strokes * 0.75 + frame * 0.60);
-            }
-
             half4 Frag(Varyings input) : SV_Target
             {
                 float seed = input.sign.x;
@@ -138,6 +118,7 @@ Shader "Cypher/NeonAdd"
                 float extra = input.sign.z;
                 float gain = input.sign.w;
                 float2 uv = input.uv;
+                float2 ddxUv = ddx(uv), ddyUv = ddy(uv);
                 float t = _Time.y;
 
                 float m = 0.0;
@@ -156,7 +137,9 @@ Shader "Cypher/NeonAdd"
                 }
                 else if (shape < 2.5)
                 {
-                    m = PanelPattern(uv, extra, seed);
+                    // Lettering from the atlas. The gradients come from the interpolated coordinates, outside the branch's
+                    // flow, so a sign's edge never picks the wrong mip.
+                    m = SAMPLE_TEXTURE2D_GRAD(_SignAtlas, sampler_SignAtlas, uv, ddxUv, ddyUv).r;
                 }
                 else if (shape < 3.5)
                 {

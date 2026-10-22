@@ -1,0 +1,299 @@
+/* CYPHER menus. Neon on near-black, after the prototype: cyan, magenta and amber over ink, mono text, angular and flat.
+   Everything here is a plain element with these classes; none of it depends on the look of the built-in controls. */
+
+:root {
+    --ink: rgb(5, 7, 13);
+    --ice: rgb(223, 246, 255);
+    --ice-dim: rgba(190, 226, 240, 0.66);
+    --ice-faint: rgba(160, 200, 216, 0.40);
+    --cyan: rgb(47, 243, 255);
+    --cyan-soft: rgba(47, 243, 255, 0.14);
+    --magenta: rgb(255, 45, 149);
+    --amber: rgb(255, 176, 58);
+    --lime: rgb(168, 255, 62);
+    --red: rgb(255, 53, 70);
+    --panel: rgba(7, 12, 21, 0.93);
+    --edge: rgba(47, 243, 255, 0.34);
+    --line: rgba(160, 200, 216, 0.16);
+}
+
+.cy-root {
+    flex-grow: 1;
+    color: var(--ice);
+    font-size: 20px;
+}
+
+.cy-text {
+    margin: 0;
+    padding: 0;
+    color: var(--ice);
+    white-space: nowrap;
+}
+
+.cy-screen {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.cy-hidden { display: none; }
+
+/* ---- loading ---------------------------------------------------------------- */
+
+.cy-loading {
+    background-color: var(--ink);
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition-property: opacity;
+    transition-duration: 0.6s;
+}
+
+.cy-loading--leaving { opacity: 0; }
+
+.cy-logo-row { flex-direction: row; align-items: flex-end; }
+.cy-logo { font-size: 120px; letter-spacing: 6px; color: var(--ice); }
+.cy-logo--accent { color: var(--magenta); }
+.cy-logo--small { font-size: 56px; letter-spacing: 3px; }
+
+.cy-bar {
+    width: 560px;
+    height: 4px;
+    margin-top: 48px;
+    background-color: var(--line);
+}
+
+.cy-bar__fill {
+    height: 100%;
+    width: 0;
+    background-color: var(--cyan);
+}
+
+.cy-status {
+    margin-top: 18px;
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: var(--ice-dim);
+}
+
+/* ---- title ------------------------------------------------------------------ */
+
+.cy-title { flex-direction: row; }
+
+.cy-title__scrim {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1100px;
+    -unity-background-image-tint-color: rgba(3, 5, 10, 0.92);
+}
+
+.cy-title__column {
+    width: 640px;
+    padding-left: 140px;
+    padding-top: 190px;
+}
+
+.cy-subtitle {
+    margin-top: 6px;
+    font-size: 22px;
+    letter-spacing: 7px;
+    color: var(--amber);
+}
+
+.cy-menu { margin-top: 70px; }
+
+.cy-title__foot {
+    position: absolute;
+    left: 140px;
+    bottom: 44px;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ice-faint);
+}
+
+.cy-title__keys {
+    position: absolute;
+    right: 56px;
+    bottom: 44px;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ice-faint);
+}
+
+/* ---- panels and dialogs ----------------------------------------------------- */
+
+.cy-scrim {
+    background-color: rgba(3, 5, 10, 0.80);
+    align-items: center;
+    justify-content: center;
+}
+
+.cy-scrim--dialog { background-color: rgba(3, 5, 10, 0.72); }
+
+.cy-panel {
+    background-color: var(--panel);
+    border-width: 1px;
+    border-color: var(--edge);
+    border-left-width: 4px;
+    border-left-color: var(--cyan);
+    padding: 40px 48px;
+}
+
+.cy-panel--pause { width: 560px; }
+.cy-panel--dialog { width: 760px; }
+.cy-panel--options { width: 1240px; height: 860px; padding: 32px 44px; }
+
+.cy-heading { font-size: 46px; letter-spacing: 6px; color: var(--ice); margin-bottom: 8px; }
+.cy-heading--small { font-size: 36px; }
+.cy-sub { font-size: 17px; letter-spacing: 3px; color: var(--ice-faint); margin-bottom: 34px; }
+
+.cy-message { font-size: 22px; color: var(--ice-dim); white-space: normal; margin-bottom: 34px; }
+.cy-message--prompt { font-size: 28px; color: var(--cyan); }
+
+.cy-actions { flex-direction: row; justify-content: flex-start; }
+
+/* ---- menu buttons ----------------------------------------------------------- */
+
+.cy-btn {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 56px;
+    padding: 0 24px;
+    margin: 3px 0;
+    border-left-width: 3px;
+    border-left-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.cy-btn .cy-text { font-size: 28px; letter-spacing: 4px; color: var(--ice-dim); }
+.cy-btn__note { font-size: 15px; letter-spacing: 2px; color: var(--ice-faint); }
+
+.cy-btn:hover, .cy-btn:focus {
+    border-left-color: var(--cyan);
+    background-color: var(--cyan-soft);
+}
+
+.cy-btn:hover .cy-text, .cy-btn:focus .cy-text { color: var(--ice); }
+.cy-btn:active { background-color: rgba(47, 243, 255, 0.28); }
+
+.cy-btn:disabled .cy-text { color: rgba(160, 200, 216, 0.5); }
+.cy-btn:disabled .cy-btn__note { color: var(--ice-dim); }
+.cy-btn:disabled:hover, .cy-btn:disabled:focus { border-left-color: rgba(0, 0, 0, 0); background-color: rgba(0, 0, 0, 0); }
+
+.cy-btn--danger .cy-text { color: rgba(255, 150, 160, 0.78); }
+.cy-btn--danger:hover, .cy-btn--danger:focus { border-left-color: var(--red); background-color: rgba(255, 53, 70, 0.16); }
+
+.cy-btn--compact { min-height: 46px; padding: 0 22px; margin: 0 14px 0 0; }
+.cy-btn--compact .cy-text { font-size: 22px; }
+
+/* ---- options ---------------------------------------------------------------- */
+
+.cy-tabs { flex-direction: row; margin: 6px 0 22px 0; border-bottom-width: 1px; border-bottom-color: var(--line); }
+
+.cy-tab {
+    padding: 12px 26px 10px 26px;
+    margin-right: 6px;
+    border-bottom-width: 3px;
+    border-bottom-color: rgba(0, 0, 0, 0);
+}
+
+.cy-tab .cy-text { font-size: 22px; letter-spacing: 4px; color: var(--ice-faint); }
+.cy-tab:hover .cy-text { color: var(--ice); }
+.cy-tab--active { border-bottom-color: var(--magenta); }
+.cy-tab--active .cy-text { color: var(--ice); }
+
+.cy-keys-hint { font-size: 15px; letter-spacing: 2px; color: var(--ice-faint); margin-left: 24px; align-self: center; }
+
+.cy-scroll { flex-grow: 1; }
+.cy-content { padding-right: 18px; }
+
+.cy-field {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 62px;
+    padding: 6px 22px;
+    border-left-width: 3px;
+    border-left-color: rgba(0, 0, 0, 0);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line);
+}
+
+.cy-field:hover, .cy-field:focus { border-left-color: var(--cyan); background-color: var(--cyan-soft); }
+
+.cy-field__title { font-size: 24px; letter-spacing: 2px; }
+.cy-field__hint { font-size: 15px; letter-spacing: 1px; color: var(--ice-faint); margin-top: 2px; white-space: normal; }
+.cy-field__label { flex-grow: 1; flex-shrink: 1; }
+.cy-field__value { flex-direction: row; align-items: center; }
+
+.cy-arrow { font-size: 30px; color: var(--ice-faint); width: 36px; -unity-text-align: middle-center; }
+.cy-arrow:hover { color: var(--cyan); }
+.cy-value { font-size: 24px; color: var(--cyan); min-width: 280px; -unity-text-align: middle-center; }
+
+.cy-slider__track { width: 380px; height: 8px; background-color: var(--line); margin-right: 18px; justify-content: center; }
+.cy-slider__fill { height: 100%; width: 0; background-color: var(--cyan); }
+.cy-slider__value { font-size: 24px; color: var(--cyan); min-width: 96px; -unity-text-align: middle-right; }
+
+.cy-toggle__pill { width: 120px; height: 34px; border-width: 1px; border-color: var(--ice-faint); align-items: center; justify-content: center; }
+.cy-toggle__pill .cy-text { font-size: 20px; letter-spacing: 3px; color: var(--ice-faint); }
+.cy-toggle--on .cy-toggle__pill { border-color: var(--lime); background-color: rgba(168, 255, 62, 0.14); }
+.cy-toggle--on .cy-toggle__pill .cy-text { color: var(--lime); }
+
+.cy-note { font-size: 18px; color: var(--amber); white-space: normal; padding: 14px 22px; }
+
+.cy-footer { flex-direction: row; margin-top: 22px; padding-top: 18px; border-top-width: 1px; border-top-color: var(--line); }
+
+/* ---- controls grid ---------------------------------------------------------- */
+
+.cy-bindrow {
+    flex-direction: row;
+    align-items: center;
+    min-height: 58px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--line);
+}
+
+.cy-bindrow--head { min-height: 38px; }
+.cy-bindrow--head .cy-text { font-size: 15px; letter-spacing: 3px; color: var(--ice-faint); }
+
+.cy-bindrow__name { width: 280px; padding-left: 25px; }
+.cy-bindrow__name .cy-text { font-size: 24px; letter-spacing: 2px; }
+.cy-bindrow__cell { width: 250px; margin-right: 12px; }
+
+.cy-bind {
+    min-height: 42px;
+    border-width: 1px;
+    border-color: var(--line);
+    align-items: center;
+    justify-content: center;
+}
+
+.cy-bind .cy-text { font-size: 21px; letter-spacing: 1px; color: var(--ice); }
+.cy-bind--changed .cy-text { color: var(--amber); }
+.cy-bind--empty .cy-text { color: var(--ice-faint); }
+.cy-bind:hover, .cy-bind:focus { border-color: var(--cyan); background-color: var(--cyan-soft); }
+.cy-bind--none { opacity: 0.25; }
+
+/* ---- toasts ----------------------------------------------------------------- */
+
+.cy-toasts {
+    position: absolute;
+    right: 40px;
+    top: 36px;
+    width: 600px;
+}
+
+.cy-toast {
+    background-color: var(--panel);
+    border-left-width: 4px;
+    border-left-color: var(--amber);
+    padding: 12px 18px;
+    margin-bottom: 8px;
+}
+
+.cy-toast .cy-text { font-size: 19px; white-space: normal; }

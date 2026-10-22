@@ -1,6 +1,8 @@
 // Vertex-coloured URP lit shader for the generated city. URP's Lit ignores vertex colour, and the
 // city's grime gradient, per-building tint and kerb highlights are all baked into it.
 // Optional window mode: the window atlas in _EmissionMap carries a glass mask in alpha.
+// Optional per-vertex surface mode (_PropSurface): TEXCOORD1.xyz = (emission, roughness, metalness), so one material covers every
+// prop kit (1), or a decal atlas with alpha blending (2). See Cypher.Core.PropMeshBuilder and PropCellMesher.
 Shader "Cypher/CityLit"
 {
     Properties
@@ -22,6 +24,11 @@ Shader "Cypher/CityLit"
 
         [Header(Surface)]
         _VertexEmission("Vertex Colour Emission", Range(0.0, 1.0)) = 0.0
+        _PropSurface("Per-vertex surface (0 off, 1 props, 2 decals)", Float) = 0
+        [HideInInspector] _SrcBlend("Source Blend", Float) = 1
+        [HideInInspector] _DstBlend("Destination Blend", Float) = 0
+        [HideInInspector] _ZWrite("Depth Write", Float) = 1
+        [HideInInspector] _Cull("Cull", Float) = 2
         [HideInInspector] _OffsetFactor("Depth Offset Factor", Float) = 0.0
         [HideInInspector] _OffsetUnits("Depth Offset Units", Float) = 0.0
         [HideInInspector] _Cutoff("Cutoff", Float) = 0.5
@@ -43,9 +50,9 @@ Shader "Cypher/CityLit"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
 
-            Blend One Zero
-            ZWrite On
-            Cull Back
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
+            Cull [_Cull]
             Offset [_OffsetFactor], [_OffsetUnits]
 
             HLSLPROGRAM

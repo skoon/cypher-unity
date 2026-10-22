@@ -25,6 +25,7 @@ half _GlassMetallic;
 half _WindowMix;
 half _VertexEmission;
 half _WorldUV;
+half _PropSurface;
 UNITY_TEXTURE_STREAMING_DEBUG_VARS;
 CBUFFER_END
 
@@ -37,13 +38,33 @@ float2 CityWorldPlanarUV(float3 positionWS, float3 normalWS)
     return n.x > n.z ? positionWS.zy : positionWS.xy;
 }
 
+// With _PropSurface the surface comes from the vertex instead: vertexSurface = (emission, roughness, metalness).
+// 1 (props): albedo = BaseMap (the shared grime) * vertex colour, glowing by its own colour.
+// 2 (decals): the atlas gives the colour and the opacity; the atlas glows by the vertex's emission.
+//
 // Albedo = BaseMap * BaseColor * vertex colour; smoothness = MaskMap.r * _Smoothness. Where the window
 // atlas (_EmissionMap) alpha marks glass, the surface becomes dark reflective glass and the atlas RGB
 // glows. The atlas always uses the mesh UV; the base and mask maps use the mesh UV or, with _WorldUV,
 // planar world coordinates.
-void InitializeCitySurface(float2 uv, float3 positionWS, float3 normalWS, half3 vertexColor, out SurfaceData surfaceData)
+void InitializeCitySurface(float2 uv, float3 positionWS, float3 normalWS, half3 vertexColor, half3 vertexSurface, out SurfaceData surfaceData)
 {
     surfaceData = (SurfaceData)0;
+
+    if (_PropSurface > 0.5)
+    {
+        half4 baseSample = SampleAlbedoAlpha(uv * _BaseMap_ST.xy + _BaseMap_ST.zw, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap));
+        bool decal = _PropSurface > 1.5;
+        half3 albedo = baseSample.rgb * _BaseColor.rgb * vertexColor;
+        surfaceData.albedo = albedo;
+        surfaceData.metallic = saturate(vertexSurface.z);
+        surfaceData.smoothness = 1.0 - clamp(vertexSurface.y, 0.04, 1.0);
+        surfaceData.specular = half3(0.0, 0.0, 0.0);
+        surfaceData.normalTS = half3(0.0, 0.0, 1.0);
+        surfaceData.emission = (decal ? albedo : vertexColor) * vertexSurface.x;
+        surfaceData.occlusion = 1.0;
+        surfaceData.alpha = decal ? baseSample.a : 1.0;
+        return;
+    }
 
     float2 surfaceUV = _WorldUV > 0.5 ? CityWorldPlanarUV(positionWS, normalWS) : uv;
 

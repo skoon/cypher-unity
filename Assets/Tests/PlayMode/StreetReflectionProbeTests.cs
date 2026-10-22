@@ -1,5 +1,8 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using Cypher.Core;
 using Cypher.Rendering;
 using NUnit.Framework;
 using UnityEngine;
@@ -24,6 +27,16 @@ namespace Cypher.Tests
             _go.SetActive(false);   // Configure before Awake/Start run
             var p = _go.AddComponent<StreetReflectionProbe>();
             p.Configure(new Vector3(1f, 6f, 2f), new Vector3(100f, 40f, 80f), resolution, captureAutomatically);
+            _go.SetActive(true);
+            return p;
+        }
+
+        StreetReflectionProbe MakeDistricts(bool captureAutomatically, int resolution = 32)
+        {
+            _go = new GameObject("ProbeDistrictsTest");
+            _go.SetActive(false);
+            var p = _go.AddComponent<StreetReflectionProbe>();
+            p.Configure(ProbeLayout.Build(CityWindow.AroundPlaza(3), ProbeLayout.DefaultPerAxis, WorldEdge.Apron), resolution, captureAutomatically);
             _go.SetActive(true);
             return p;
         }
@@ -116,6 +129,78 @@ namespace Cypher.Tests
         public void ProjectEnablesRealtimeReflectionProbes()
         {
             Assert.IsTrue(QualitySettings.realtimeReflectionProbes, "the street probe depends on this setting");
+        }
+
+        [Test]
+        public void ALayoutMakesAProbePerDistrictRenderedFromItsJunctionAndProjectedOntoItsBox()
+        {
+            IReadOnlyList<ProbeRegion> layout = ProbeLayout.Build(CityWindow.AroundPlaza(3), ProbeLayout.DefaultPerAxis, WorldEdge.Apron);
+            StreetReflectionProbe p = MakeDistricts(captureAutomatically: false);
+
+            Assert.AreEqual(9, p.Count);
+            Assert.AreEqual(9, p.Probes.Count);
+            for (int i = 0; i < layout.Count; i++)
+            {
+                ReflectionProbe probe = p.Probes[i];
+                Assert.AreEqual((float)layout[i].CaptureX, probe.transform.position.x, 1e-3f, $"probe {i} capture x");
+                Assert.AreEqual((float)layout[i].CaptureZ, probe.transform.position.z, 1e-3f, $"probe {i} capture z");
+                Vector3 boxCentre = probe.transform.TransformPoint(probe.center);
+                Assert.AreEqual((float)layout[i].BoxCentreX, boxCentre.x, 1e-3f, $"probe {i} box centre x");
+                Assert.AreEqual((float)layout[i].BoxCentreZ, boxCentre.z, 1e-3f, $"probe {i} box centre z");
+                Assert.AreEqual((float)layout[i].SizeX, probe.size.x, 1e-3f);
+                Assert.AreEqual(ProbeLayout.Overlap, probe.blendDistance, 1e-3f, "blends across the overlap");
+                Assert.IsTrue(probe.boxProjection);
+            }
+            Assert.AreSame(p.Probes[0], p.Probe);
+        }
+
+        [UnityTest]
+        public IEnumerator EveryProbeIsCapturedAndTheSetIsOnlyCapturedWhenAllAre()
+        {
+            RequireGpu();
+            StreetReflectionProbe p = MakeDistricts(captureAutomatically: false);
+            Assert.IsFalse(p.IsCaptured);
+            p.Capture();
+            Assert.AreEqual(1, p.CaptureCount, "one round, however many probes");
+            yield return WaitCaptured(p);
+            Assert.IsTrue(p.IsCaptured);
+            foreach (ReflectionProbe probe in p.Probes)
+            {
+                Assert.IsNotNull(probe.texture, "a cubemap was rendered");
+                Assert.AreEqual(TextureDimension.Cube, probe.texture.dimension);
+            }
+        }
+
+        [Test]
+        public void ChangingTheResolutionChangesEveryProbe()
+        {
+            StreetReflectionProbe p = MakeDistricts(captureAutomatically: false, resolution: 32);
+            p.SetResolution(64);
+            Assert.AreEqual(64, p.Resolution);
+            Assert.IsTrue(p.Probes.All(probe => probe.resolution == 64));
+            Assert.Throws<ArgumentOutOfRangeException>(() => p.SetResolution(48), "not a power of two");
+        }
+
+        [UnityTest]
+        public IEnumerator ReconfiguringWithADifferentNumberOfDistrictsRebuildsTheProbes()
+        {
+            StreetReflectionProbe p = MakeDistricts(captureAutomatically: false);
+            p.Configure(ProbeLayout.Build(CityWindow.AroundPlaza(1), 1), 32, false);
+            Assert.AreEqual(1, p.Count);
+            Assert.AreEqual(1, p.Probes.Count);
+            Assert.AreEqual(0, p.CaptureCount, "a rebuilt set has captured nothing yet");
+            Assert.IsFalse(p.IsCaptured);
+            yield return null;   // destroyed objects go at the end of the frame
+            Assert.AreEqual(1, _go.GetComponentsInChildren<ReflectionProbe>().Length, "the old probes are gone");
+        }
+
+        [Test]
+        public void ABadLayoutFailsLoudly()
+        {
+            StreetReflectionProbe p = MakeDistricts(captureAutomatically: false);
+            Assert.Throws<ArgumentNullException>(() => p.Configure((IReadOnlyList<ProbeRegion>)null, 32, false));
+            Assert.Throws<ArgumentException>(() => p.Configure(new List<ProbeRegion>(), 32, false));
+            Assert.Throws<ArgumentOutOfRangeException>(() => p.Configure(ProbeLayout.Build(CityWindow.AroundPlaza(1), 1), 8, false));
         }
 
         [Test]

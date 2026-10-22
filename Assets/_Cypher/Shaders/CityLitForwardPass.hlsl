@@ -31,6 +31,7 @@ struct Attributes
     float3 normalOS   : NORMAL;
     float2 texcoord   : TEXCOORD0;
     float4 color      : COLOR;
+    float4 texcoord1  : TEXCOORD1;   // only read in the per-vertex surface modes
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -40,6 +41,7 @@ struct Varyings
     float3 positionWS : TEXCOORD1;
     float3 normalWS  : TEXCOORD2;
     half3  color     : TEXCOORD4;
+    half3  vertexSurface : TEXCOORD3;
 
 #ifdef _ADDITIONAL_LIGHTS_VERTEX
     half4 fogFactorAndVertexLight : TEXCOORD5;   // x: fog, yzw: vertex light
@@ -103,6 +105,7 @@ Varyings CityPassVertex(Attributes input)
 
     output.uv = input.texcoord;   // raw: the atlas uses it as is; base/mask maps apply their own tiling
     output.color = input.color.rgb;
+    output.vertexSurface = input.texcoord1.xyz;
     output.normalWS = normalInput.normalWS;
     output.positionWS = vertexInput.positionWS;
     output.positionCS = vertexInput.positionCS;
@@ -134,7 +137,7 @@ void CityPassFragment(
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
     SurfaceData surfaceData;
-    InitializeCitySurface(input.uv, input.positionWS, input.normalWS, input.color, surfaceData);
+    InitializeCitySurface(input.uv, input.positionWS, input.normalWS, input.color, input.vertexSurface, surfaceData);
 
     InputData inputData;
     InitializeInputData(input, inputData);
@@ -143,7 +146,7 @@ void CityPassFragment(
     // Diffuse only: metals have no diffuse term, and the fills are unshadowed by design.
     color.rgb += surfaceData.albedo * (1.0 - surfaceData.metallic) * CityFillLight(inputData.normalWS);
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
-    color.a = 1.0;
+    color.a = surfaceData.alpha;   // 1 for everything opaque; the decals' alpha when they are blended
     outColor = color;
 
 #ifdef _WRITE_RENDERING_LAYERS

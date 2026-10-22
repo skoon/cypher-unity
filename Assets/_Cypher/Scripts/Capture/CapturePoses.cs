@@ -26,6 +26,15 @@ namespace Cypher.Capture
             new Pose { Name = "north_close", Position = new Vector3(0f, 1.9f, 30f), Yaw = 0f, Pitch = 10f },
             new Pose { Name = "north_mid", Position = new Vector3(0f, 1.9f, 12f), Yaw = 0f, Pitch = 12f },
             new Pose { Name = "road_down", Position = new Vector3(0f, 1.7f, 31f), Yaw = 90f, Pitch = -12f },
+
+            // The whole 7x7 city: the edge looking out (apron, then the skyline ring), a corner, the outer road, the longest avenue,
+            // a wet street far from the plaza (its own reflection probe), and a high view of everything.
+            new Pose { Name = "edge_out", Position = new Vector3(217f, 1.7f, 0f), Yaw = 90f, Pitch = 4f },
+            new Pose { Name = "edge_corner", Position = new Vector3(214f, 1.7f, 214f), Yaw = 45f, Pitch = 4f },   // on the outer road, where the two outer roads meet
+            new Pose { Name = "edge_along", Position = new Vector3(217f, 1.7f, -200f), Yaw = 0f, Pitch = 2f },
+            new Pose { Name = "avenue_long", Position = new Vector3(31f, 1.7f, -217f), Yaw = 0f, Pitch = 0f },
+            new Pose { Name = "far_district_wet", Position = new Vector3(-155f, 1.7f, 155f), Yaw = 200f, Pitch = -8f },
+            new Pose { Name = "overview_whole", Position = new Vector3(0f, 240f, -270f), Yaw = 0f, Pitch = 48f },
         };
     }
 }

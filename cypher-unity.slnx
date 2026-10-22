@@ -1,13 +1,15 @@
 ﻿<Solution>
+  <Project Path="Cypher.Tests.PlayMode.csproj" />
   <Project Path="Cypher.Tests.EditMode.csproj" />
   <Project Path="Cypher.Rendering.csproj" />
-  <Project Path="Cypher.Capture.csproj" />
-  <Project Path="Cypher.Tests.PlayMode.csproj" />
   <Project Path="Cypher.Core.csproj" />
+  <Project Path="Cypher.UI.csproj" />
+  <Project Path="Cypher.Capture.csproj" />
   <Project Path="Cypher.City.csproj" />
   <Project Path="Cypher.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Cypher.Player.csproj" />
   <Project Path="Cypher.Perf.csproj" />
+  <Project Path="Cypher.Game.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>

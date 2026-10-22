@@ -73,7 +73,7 @@ namespace Cypher.Tests
             {
                 Assert.Greater(q.Width, 0);
                 Assert.Greater(q.Height, 0);
-                Assert.That(q.Gain, Is.InRange(0.3, 6.0));
+                Assert.That(q.Gain, Is.InRange(0.2, 6.0));
                 Assert.That(q.FlickerMode, Is.InRange(0, 4));
                 Assert.That(q.Seed, Is.InRange(0.0, 10.0));
                 Assert.GreaterOrEqual(q.Chase, 0);
@@ -87,9 +87,25 @@ namespace Cypher.Tests
             var palette = NeonDistricts.All.SelectMany(d => d.Colours).ToList();
             foreach (NeonQuad q in Layout.Quads)
             {
-                Assert.IsTrue(palette.Any(c => c.R == q.Colour.R && c.G == q.Colour.G && c.B == q.Colour.B), "unknown neon colour");
+                // the glow washes round the LED screens are white leaned toward a district hue
+                Assert.IsTrue(palette.Any(c => (c.R == q.Colour.R && c.G == q.Colour.G && c.B == q.Colour.B) || LeansToward(q.Colour, c)), "unknown neon colour");
             }
             Assert.GreaterOrEqual(Layout.Quads.Select(q => (q.Colour.R, q.Colour.G, q.Colour.B)).Distinct().Count(), 6, "a varied palette");
+        }
+
+        /// <summary>Whether a colour is white moved some share (not zero, not all) of the way to a hue.</summary>
+        static bool LeansToward(Rgb colour, Rgb hue)
+        {
+            double share = double.NaN;
+            foreach ((float c, float h) in new[] { (colour.R, hue.R), (colour.G, hue.G), (colour.B, hue.B) })
+            {
+                if (Math.Abs(h - 1f) < 0.02f) { if (Math.Abs(c - 1f) > 0.002f) return false; continue; }
+                double s = (c - 1.0) / (h - 1.0);
+                if (s < 0.2 || s > 0.8) return false;
+                if (!double.IsNaN(share) && Math.Abs(s - share) > 0.002) return false;
+                share = s;
+            }
+            return !double.IsNaN(share);
         }
 
         [Test]

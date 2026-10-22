@@ -32,6 +32,9 @@ namespace Cypher.Core
 
         public static double CellCentre(int index) => Base + index * Cell + BlockOffset;
 
+        /// <summary>Middle of the road corridor that opens grid cell <paramref name="index"/> (each cell's road is its low edge).</summary>
+        public static double RoadCentre(int index) => Base + index * Cell + Road / 2;
+
         /// <summary>True when a world-space XZ point is in a road corridor rather than a block.</summary>
         public static bool IsOnRoad(double x, double z)
         {

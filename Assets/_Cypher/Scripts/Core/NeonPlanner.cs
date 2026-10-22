@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Cypher.Core
 {
@@ -6,26 +7,41 @@ namespace Cypher.Core
     /// Decides where the neon goes: a port of Neon._placeFromWalls and its helpers for the shapes-only
     /// slice. Per street or alley wall it places shopfront fascia signs, plaques, doorway tubes, a fascia
     /// strip, projecting blade signs, edge tubes, floor bands, a stack of signs and alley-mouth glow, all
-    /// in the colours of the wall's district. Left out on purpose: glyph lettering, LED billboards,
-    /// floating holograms, and the pooled real lights (light spill is done with glow pools instead).
-    /// The RNG is consumed in the planner's own order, so a seed always gives the same signage, but it
-    /// is not draw-for-draw the prototype's, which spends draws on the parts left out.
+    /// in the colours of the wall's district, then the LED hoardings on tall street facades and sixteen
+    /// floating holograms. Left out on purpose: the pooled real lights (light spill is done with glow
+    /// pools instead).
+    /// <para>
+    /// Three random streams keep each part from disturbing the others: the main one for the shapes (consumed
+    /// in the planner's own order, so a seed always gives the same signage, though not draw-for-draw the
+    /// prototype's), one that chooses each sign's lettering, and one for the hoardings and holograms. Changing
+    /// the atlas or the boards therefore never moves a tube.
+    /// </para>
     /// </summary>
     public static class NeonPlanner
     {
         public const uint DefaultSeed = 77123;
 
+        /// <summary>The lettering and board streams are the main seed mixed with these.</summary>
+        const uint SignStreamMix = 0x5163A11D, BoardStreamMix = 0xB0A2D5ED;
+
+        /// <summary>Holograms are hung over buildings taller than this.</summary>
+        public const double HologramMinHeight = 40;
+
+        public const int HologramAttempts = 16;
+
         /// <summary>Street pools float just above the sidewalk deck.</summary>
         public const double PoolY = 0.245;
 
-        public static NeonLayout Plan(CityPlan plan, CityWindow window, uint seed = DefaultSeed)
+        /// <param name="atlas">Where the lettering is; the signs are given cells from it. Defaults to the standard atlas.</param>
+        public static NeonLayout Plan(CityPlan plan, CityWindow window, uint seed = DefaultSeed, NeonAtlasLayout atlas = null)
         {
             if (plan == null) throw new ArgumentNullException(nameof(plan));
-            var placer = new Placer(plan, seed);
+            var placer = new Placer(plan, seed, atlas ?? NeonAtlas.Layout());
             foreach (NeonWall w in NeonWalls.Build(plan, window))
             {
                 if (NeonWalls.IsUsable(w)) placer.PlaceWall(w);
             }
+            placer.PlaceHolograms(window);
             return placer.Layout;
         }
 
@@ -34,18 +50,33 @@ namespace Cypher.Core
         sealed class Placer
         {
             readonly CityPlan _plan;
+            readonly NeonAtlasLayout _atlas;
             readonly Rng _rng;
+            readonly Rng _signRng;
+            readonly Rng _boardRng;
             NeonWall _w;
 
             public NeonLayout Layout { get; } = new NeonLayout();
 
-            public Placer(CityPlan plan, uint seed)
+            public Placer(CityPlan plan, uint seed, NeonAtlasLayout atlas)
             {
                 _plan = plan;
+                _atlas = atlas;
                 _rng = new Rng(seed);
+                _signRng = new Rng(unchecked(seed ^ SignStreamMix));
+                _boardRng = new Rng(unchecked(seed ^ BoardStreamMix));
             }
 
             double R() => _rng.Next();
+
+            double B() => _boardRng.Next();
+
+            /// <summary>The lettering for a sign: a random cell of the group.</summary>
+            string Cell(SignGroup group)
+            {
+                IReadOnlyList<AtlasCell> cells = _atlas.Group(group);
+                return cells[(int)(_signRng.Next() * cells.Count)].Name;
+            }
 
             (double X, double Y, double Z) P(double s, double y, double off) =>
                 (_w.Ox + _w.Tx * s + _w.Nx * off, y, _w.Oz + _w.Tz * s + _w.Nz * off);
@@ -168,11 +199,103 @@ namespace Cypher.Core
                         bool kanji = R() > 0.4;
                         var p = P(s, y + size * 0.5, 0);
                         double proj = 0.5 + R() * 0.45;
-                        PanelSign(p.X, p.Y, p.Z, w.Nx, w.Nz, kanji ? size : size * 2.1, size, proj, district, pool: false);
+                        PanelSign(p.X, p.Y, p.Z, w.Nx, w.Nz, kanji ? size : size * 2.1, size, proj, district, pool: false, kanji ? SignGroup.Kanji : SignGroup.Word);
                         y += size + 0.3 + R() * 0.5;
                     }
                 }
+
+                if (street && tall > 16 && len > 11 && clear > 8) Hoardings(district, len, tall, groundWall);
             }
+
+            /// <summary>LED hoardings on a tall street facade: one, or two on a tower, each a coin toss. Drawn from the board stream.</summary>
+            void Hoardings(NeonDistrict district, double len, double tall, bool groundWall)
+            {
+                int n = tall > 40 ? 2 : 1;
+                for (int i = 0; i < n; i++)
+                {
+                    if (B() > 0.62) continue;
+                    double bw = Math.Min(len * 0.8, 9 + B() * 11);
+                    double bh = Math.Min(tall * 0.4, bw * (0.46 + B() * 0.4));
+                    if (bh < 3.5) continue;
+                    double lo = _w.Y0 + (groundWall ? 12 : 2.5) + bh * 0.5;
+                    double hi = _w.Y1 - 2.5 - bh * 0.5;
+                    if (hi <= lo) continue;
+                    double y = lo + (hi - lo) * ((i + 0.3 + B() * 0.4) / n);
+                    double s = len * 0.5 + (B() - 0.5) * Math.Max(0, len - bw - 1.5);
+                    var p = P(s, y, 0);
+                    Hoarding(p.X, p.Y, p.Z, bw, bh, district);
+                }
+            }
+
+            /// <summary>A screen in a dark frame, ringed by tubes, with a wash of its light on the air in front.</summary>
+            void Hoarding(double x, double y, double z, double width, double height, NeonDistrict district)
+            {
+                double nx = _w.Nx, nz = _w.Nz, tx = -nz, tz = nx;
+                const double proj = 0.5;
+                Rgb tint = Lean(district.PickHue(_boardRng), 0.35f);   // a screen is broadly neutral; the district only leans it
+
+                Box(x + nx * proj * 0.5, y, z + nz * proj * 0.5, nx, nz, width + 0.5, height + 0.5, proj);
+                Layout.Boards.Add(new NeonBoard
+                {
+                    Gx = _w.Gx, Gz = _w.Gz, X = x + nx * (proj + 0.04), Y = y, Z = z + nz * (proj + 0.04), Nx = nx, Nz = nz,
+                    Width = width, Height = height, Panel = (int)(B() * BoardArt.PanelCount), Colour = tint,
+                    Seed = B() * 10, Glitch = 0.6 + B() * 0.8, TickerSpeed = 0.05 + B() * 0.09, Gain = 2.2 + B() * 1.6,
+                });
+
+                QuadIn(_w.Gx, _w.Gz, x + nx * (proj + 1.2), y, z + nz * (proj + 1.2), nx, nz, Math.Max(width, height) * 1.5, Math.Max(width, height) * 1.5, 0,
+                    NeonShape.Radial, tint, 0.30, 0, B() * 10, 0);
+
+                // rim tubes framing the hoarding
+                Rgb rim = district.PickHue(_boardRng);
+                foreach (int sgn in new[] { -1, 1 })
+                {
+                    QuadIn(_w.Gx, _w.Gz, x + nx * (proj + 0.1), y + sgn * (height * 0.5 + 0.22), z + nz * (proj + 0.1), nx, nz, width + 0.5, 0.20, 0,
+                        NeonShape.Tube, rim, 2.4, 0, B() * 10, 0);
+                    QuadIn(_w.Gx, _w.Gz, x + tx * sgn * (width * 0.5 + 0.22) + nx * (proj + 0.1), y, z + tz * sgn * (width * 0.5 + 0.22) + nz * (proj + 0.1), nx, nz,
+                        height + 0.5, 0.20, Math.PI / 2, NeonShape.Tube, rim, 2.4, 0, B() * 10, 0);
+                }
+            }
+
+            /// <summary>
+            /// A handful of free-floating projections hanging over the streets beside the tall buildings, tried sixteen times and skipped
+            /// where the spot is inside another lot.
+            /// </summary>
+            public void PlaceHolograms(CityWindow window)
+            {
+                var tall = new List<Building>();
+                foreach (Building b in _plan.Buildings)
+                {
+                    if (b.Height > HologramMinHeight && window.Contains(b.Lot.Gx, b.Lot.Gz)) tall.Add(b);
+                }
+                if (tall.Count == 0) return;
+
+                for (int i = 0; i < HologramAttempts; i++)
+                {
+                    Building b = tall[(int)(B() * tall.Count)];
+                    int dir = B() > 0.5 ? 1 : -1;
+                    bool axis = B() > 0.5;
+                    double nx = axis ? dir : 0, nz = axis ? 0 : dir;
+                    double off = (axis ? b.Width : b.Depth) * 0.5 + 5 + B() * 5;
+                    double x = b.X + nx * off, z = b.Z + nz * off;
+                    if (_plan.IsBlocked(x, z)) continue;   // never hang a projection inside another lot's massing
+
+                    double y = 14 + B() * 24;
+                    double w = 7 + B() * 9;
+                    double h = w * (0.7 + B() * 0.7);
+                    int panel = (int)(B() * BoardArt.PanelCount);
+                    Rgb tint = Lean(NeonDistricts.At(x, z).PickHue(_boardRng), 0.6f);
+                    Layout.Holograms.Add(new NeonBoard
+                    {
+                        Gx = b.Lot.Gx, Gz = b.Lot.Gz, X = x, Y = y, Z = z, Nx = nx, Nz = nz, Width = w, Height = h, Panel = panel, Colour = tint,
+                        Seed = B() * 10, Glitch = 1.1 + B() * 0.9, TickerSpeed = 0.06 + B() * 0.1, Gain = 1.1 + B() * 0.8,
+                    });
+                    QuadIn(b.Lot.Gx, b.Lot.Gz, x, y, z, nx, nz, Math.Max(w, h) * 1.2, Math.Max(w, h) * 1.2, 0, NeonShape.Radial, tint, 0.22, 0, B() * 10, 0);
+                }
+            }
+
+            /// <summary>White pulled <paramref name="share"/> of the way toward a hue.</summary>
+            static Rgb Lean(Rgb hue, float share) =>
+                new Rgb(1f + (hue.R - 1f) * share, 1f + (hue.G - 1f) * share, 1f + (hue.B - 1f) * share);
 
             /// <summary>One shopfront bay: fascia sign, plaque, doorway tubes, spill on the road.</summary>
             void Shopfront(NeonDistrict district, double s, double width, double fasciaY, double clear, bool street)
@@ -184,14 +307,14 @@ namespace Cypher.Core
                     double sw = Math.Max(1.4, width * (0.8 + R() * 0.18));
                     double sh = sw * (0.24 + R() * 0.11);
                     var p = P(s, fasciaY + sh * 0.55 + 0.12, 0);
-                    PanelSign(p.X, p.Y, p.Z, nx, nz, sw, sh, 0.26 + R() * 0.2, district, pool: street);
+                    PanelSign(p.X, p.Y, p.Z, nx, nz, sw, sh, 0.26 + R() * 0.2, district, pool: street, SignGroup.Word);
                 }
 
                 if (R() > 0.66)
                 {
                     double sz = 0.9 + R() * 0.8;
                     var p = P(s + (R() - 0.5) * width * 0.5, fasciaY + 1.9 + R() * 1.4, 0);
-                    PanelSign(p.X, p.Y, p.Z, nx, nz, sz, sz, 0.22 + R() * 0.18, district, pool: false);
+                    PanelSign(p.X, p.Y, p.Z, nx, nz, sz, sz, 0.22 + R() * 0.18, district, pool: false, SignGroup.Kanji);
                 }
 
                 if (R() > (street ? 0.42 : 0.72))
@@ -209,7 +332,7 @@ namespace Cypher.Core
                         var p = P(s, doorY + 1.5, 0.12);
                         Rgb iconCol = district.PickHue(_rng);
                         int mode = R() > 0.86 ? 1 : 0;
-                        Quad(p.X, p.Y, p.Z, nx, nz, 0.65, 0.65, 0, NeonShape.Panel, iconCol, 3.0, mode, null, 0);
+                        Quad(p.X, p.Y, p.Z, nx, nz, 0.65, 0.65, 0, NeonShape.Panel, iconCol, 3.0, mode, null, 0, Cell(SignGroup.Icon));
                     }
                     if (street)
                     {
@@ -232,7 +355,7 @@ namespace Cypher.Core
             }
 
             /// <summary>Sign face on a dark housing proud of the wall, optionally with a pool of light on the street.</summary>
-            void PanelSign(double x, double y, double z, double nx, double nz, double width, double height, double proj, NeonDistrict district, bool pool)
+            void PanelSign(double x, double y, double z, double nx, double nz, double width, double height, double proj, NeonDistrict district, bool pool, SignGroup lettering)
             {
                 Rgb color = district.PickHue(_rng);
                 double r = R();
@@ -241,7 +364,7 @@ namespace Cypher.Core
 
                 // Housing sits proud of the wall; the lit face floats just in front of it.
                 Box(x + nx * proj * 0.5, y, z + nz * proj * 0.5, nx, nz, width + 0.18, height + 0.18, proj);
-                Quad(x + nx * (proj + 0.035), y, z + nz * (proj + 0.035), nx, nz, width, height, 0, NeonShape.Panel, color, gain, mode, null, 0);
+                Quad(x + nx * (proj + 0.035), y, z + nz * (proj + 0.035), nx, nz, width, height, 0, NeonShape.Panel, color, gain, mode, null, 0, Cell(lettering));
 
                 if (pool) Pool(x + nx * (proj + 1.6), z + nz * (proj + 1.6), color, Math.Max(3, width * 1.5), 0.4);
             }
@@ -255,6 +378,7 @@ namespace Cypher.Core
                 int mode = r > 0.90 ? 1 : r > 0.84 ? 3 : 0;
                 double gain = 2.8 + R() * 1.6;
                 double seed = R() * 10;
+                string lettering = Cell(SignGroup.Vertical);
 
                 double px = _w.Ox, pz = _w.Oz;
                 double cx = px + tx * u + nx * (proj * 0.5 + 0.1);
@@ -268,7 +392,7 @@ namespace Cypher.Core
                 foreach (int side in new[] { 1, -1 })
                 {
                     Quad(cx + tx * side * 0.20, y, cz + tz * side * 0.20, tx * side, tz * side, proj * 0.86, h, 0,
-                        NeonShape.Panel, color, gain, mode, seed, 0);
+                        NeonShape.Panel, color, gain, mode, seed, 0, lettering);
                 }
                 // Tube running down the leading edge, away from the wall.
                 Quad(px + tx * u + nx * (proj + 0.12), y, pz + tz * u + nz * (proj + 0.12), nx, nz, h, 0.16, Math.PI / 2,
@@ -278,13 +402,17 @@ namespace Cypher.Core
             }
 
             void Quad(double x, double y, double z, double nx, double nz, double width, double height, double roll,
-                NeonShape shape, Rgb colour, double gain, int mode, double? seed, double chase)
+                NeonShape shape, Rgb colour, double gain, int mode, double? seed, double chase, string cell = null) =>
+                QuadIn(_w.Gx, _w.Gz, x, y, z, nx, nz, width, height, roll, shape, colour, gain, mode, seed ?? R() * 10, chase, cell);
+
+            void QuadIn(int gx, int gz, double x, double y, double z, double nx, double nz, double width, double height, double roll,
+                NeonShape shape, Rgb colour, double gain, int mode, double seed, double chase, string cell = null)
             {
                 Layout.Quads.Add(new NeonQuad
                 {
-                    Gx = _w.Gx, Gz = _w.Gz, X = x, Y = y, Z = z, Nx = nx, Nz = nz,
+                    Gx = gx, Gz = gz, X = x, Y = y, Z = z, Nx = nx, Nz = nz,
                     Width = width, Height = height, Roll = roll, Shape = shape, Colour = colour, Gain = gain,
-                    FlickerMode = mode, Seed = seed ?? R() * 10, Chase = chase,
+                    FlickerMode = mode, Seed = seed, Chase = chase, Cell = cell,
                 });
             }
 

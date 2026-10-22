@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Cypher.Core;
 using NUnit.Framework;
 
@@ -50,9 +51,9 @@ namespace Cypher.Tests
             {
                 Assert.IsTrue(CityLayout.IsOnRoad(w.X, w.Z), $"({w.X}, {w.Z}) is not on a road");
             }
-            Assert.AreEqual(-31.0, BenchmarkPilot.RoadCentre(CityLayout.PlazaIndex));
-            Assert.AreEqual(31.0, BenchmarkPilot.RoadCentre(CityLayout.PlazaIndex + 1));
-            Assert.AreEqual(-93.0, BenchmarkPilot.RoadCentre(CityLayout.PlazaIndex - 1));
+            Assert.AreEqual(-31.0, CityLayout.RoadCentre(CityLayout.PlazaIndex));
+            Assert.AreEqual(31.0, CityLayout.RoadCentre(CityLayout.PlazaIndex + 1));
+            Assert.AreEqual(-93.0, CityLayout.RoadCentre(CityLayout.PlazaIndex - 1));
         }
 
         [Test]
@@ -199,6 +200,55 @@ namespace Cypher.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => pilot.Next(0, 0, 0, 0, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => pilot.Next(0, 0, 0, 0, double.NaN));
             Assert.Throws<ArgumentOutOfRangeException>(() => pilot.Next(0, 0, 0, 0, double.PositiveInfinity));
+        }
+
+        [Test]
+        public void TheRouteForANameIsTheRightOne()
+        {
+            Assert.AreSame(BenchmarkPilot.DefaultRoute, BenchmarkPilot.Route(BenchmarkRoute.Centre));
+            Assert.AreSame(BenchmarkPilot.CityRoute, BenchmarkPilot.Route(BenchmarkRoute.City));
+            Assert.Throws<ArgumentOutOfRangeException>(() => BenchmarkPilot.Route((BenchmarkRoute)99));
+        }
+
+        [Test]
+        public void EveryLegOfTheCityRouteRunsAlongARoadCorridor()
+        {
+            var route = BenchmarkPilot.CityRoute;
+            for (int i = 0; i < route.Count; i++)
+            {
+                BenchmarkPilot.Waypoint a = route[i], b = route[(i + 1) % route.Count];
+                Assert.IsTrue(CityLayout.IsOnRoad(a.X, a.Z), $"waypoint {i} is not on a road");
+                bool alongX = Math.Abs(a.Z - b.Z) < 1e-9, alongZ = Math.Abs(a.X - b.X) < 1e-9;
+                Assert.IsTrue(alongX || alongZ, $"leg {i} is diagonal, so it would cut across a block");
+                // the whole straight leg must stay in the corridor: sample it
+                for (int s = 0; s <= 40; s++)
+                {
+                    double t = s / 40.0;
+                    Assert.IsTrue(CityLayout.IsOnRoad(a.X + (b.X - a.X) * t, a.Z + (b.Z - a.Z) * t), $"leg {i} leaves the road at {t:0.00}");
+                }
+            }
+        }
+
+        [Test]
+        public void TheCityRouteReachesEveryEdgeAndCornerOfTheWholeCity()
+        {
+            var route = BenchmarkPilot.CityRoute;
+            double edge = WorldEdge.CityHalf - CityLayout.Road / 2;
+            Assert.IsTrue(route.Any(w => Math.Abs(w.X - edge) < 1e-9 && Math.Abs(w.Z - edge) < 1e-9), "north-east corner");
+            Assert.IsTrue(route.Any(w => Math.Abs(w.X - edge) < 1e-9 && Math.Abs(w.Z + edge) < 1e-9), "south-east corner");
+            Assert.IsTrue(route.Any(w => Math.Abs(w.X + edge) < 1e-9 && Math.Abs(w.Z + edge) < 1e-9), "south-west corner");
+            Assert.IsTrue(route.Any(w => Math.Abs(w.X + edge) < 1e-9 && Math.Abs(w.Z - edge) < 1e-9), "north-west corner");
+            Assert.IsTrue(route.All(w => WorldEdge.IsInsidePlayArea(w.X, w.Z)));
+        }
+
+        [Test]
+        public void AFreeWalkerCompletesTheCityRouteInAboutFiveMinutes()
+        {
+            var walker = new Walker(new BenchmarkPilot(BenchmarkPilot.CityRoute), CityLayout.RoadCentre(CityLayout.PlazaIndex), CityLayout.RoadCentre(CityLayout.PlazaIndex));
+            for (int s = 0; s < 60 * 600 && walker.Pilot.Laps < 1; s++) walker.Run(Dt);
+            Assert.AreEqual(1, walker.Pilot.Laps, "a whole lap within ten minutes");
+            Assert.That(walker.Pilot.Elapsed, Is.InRange(230.0, 420.0));
+            Assert.That(walker.Travelled, Is.InRange(1700.0, 2300.0), "from beside the plaza round every road at the edge and back to the plaza road");
         }
     }
 }

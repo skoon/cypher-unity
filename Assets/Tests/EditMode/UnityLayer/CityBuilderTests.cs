@@ -43,7 +43,14 @@ namespace Cypher.Tests
             Assert.IsNotNull(neonShader, "Cypher/NeonAdd shader not found");
             var neon = new Material(neonShader) { name = "neon" };
             _cleanup.Add(neon);
-            return new CityMaterials { Walls = M("walls"), Roofs = M("roofs"), Sidewalk = M("sidewalk"), Road = M("road"), Paint = M("paint"), Metal = M("metal"), Neon = neon };
+            Shader boardShader = Shader.Find("Cypher/NeonBoard");
+            Assert.IsNotNull(boardShader, "Cypher/NeonBoard shader not found");
+            var boards = new Material(boardShader) { name = "boards" };
+            var holos = new Material(boardShader) { name = "holos" };
+            holos.SetFloat("_Holo", 1f);
+            _cleanup.Add(boards);
+            _cleanup.Add(holos);
+            return new CityMaterials { Walls = M("walls"), Roofs = M("roofs"), Sidewalk = M("sidewalk"), Road = M("road"), Paint = M("paint"), Metal = M("metal"), Neon = neon, Boards = boards, Holos = holos };
         }
 
         CityBuilder NewBuilder(int radius = 1, uint seed = CityPlan.DefaultSeed)

@@ -62,9 +62,9 @@ namespace Cypher.Core
 
         static IReadOnlyList<Waypoint> BuildDefaultRoute()
         {
-            double near = RoadCentre(CityLayout.PlazaIndex);        // the road beside the plaza block
-            double east = RoadCentre(CityLayout.PlazaIndex + 1);
-            double far = RoadCentre(CityLayout.PlazaIndex - 1);     // the outer road of the 3x3 window
+            double near = CityLayout.RoadCentre(CityLayout.PlazaIndex);        // the road beside the plaza block
+            double east = CityLayout.RoadCentre(CityLayout.PlazaIndex + 1);
+            double far = CityLayout.RoadCentre(CityLayout.PlazaIndex - 1);     // the outer road of the 3x3 window
             return new[]
             {
                 new Waypoint(east, near, false),
@@ -75,8 +75,41 @@ namespace Cypher.Core
             };
         }
 
-        /// <summary>Middle of the road corridor that opens grid cell <paramref name="cell"/>.</summary>
-        public static double RoadCentre(int cell) => CityLayout.Base + cell * CityLayout.Cell + CityLayout.Road / 2;
+        /// <summary>
+        /// A tour of the whole city for the full-grid measurement: down the avenue beside the plaza to the north edge, round the
+        /// outermost roads past every edge and corner (the apron and the skyline ring show there), and on round again.
+        /// Every leg runs along a road corridor, so the route never meets a wall, and the closing leg runs back along the road
+        /// beside the plaza. A lap is about 2.2 km: sprinting nearly all of it, five minutes or so.
+        /// </summary>
+        public static IReadOnlyList<Waypoint> CityRoute { get; } = BuildCityRoute();
+
+        static IReadOnlyList<Waypoint> BuildCityRoute()
+        {
+            double plaza = CityLayout.RoadCentre(CityLayout.PlazaIndex);        // the road beside the plaza block
+            double side = CityLayout.RoadCentre(CityLayout.PlazaIndex + 1);
+            double low = CityLayout.RoadCentre(0);                              // the outermost roads, on all four sides
+            double high = CityLayout.RoadCentre(CityLayout.Grid);
+            return new[]
+            {
+                new Waypoint(side, plaza, false),
+                new Waypoint(side, high, true),
+                new Waypoint(high, high, true),
+                new Waypoint(high, low, true),
+                new Waypoint(low, low, true),
+                new Waypoint(low, high, true),
+                new Waypoint(low, plaza, true),
+            };
+        }
+
+        public static IReadOnlyList<Waypoint> Route(BenchmarkRoute route)
+        {
+            switch (route)
+            {
+                case BenchmarkRoute.Centre: return DefaultRoute;
+                case BenchmarkRoute.City: return CityRoute;
+                default: throw new ArgumentOutOfRangeException(nameof(route), route, "unknown benchmark route");
+            }
+        }
 
         /// <summary>Index of the waypoint being walked toward.</summary>
         public int Target { get; private set; }

@@ -12,6 +12,7 @@ namespace Cypher.Tests
         [TestCase("Cypher/CityLit")]
         [TestCase("Cypher/SkyGradient")]
         [TestCase("Cypher/NeonAdd")]
+        [TestCase("Cypher/NeonBoard")]
         [TestCase("Cypher/Rain")]
         public void ShaderImportsWithoutErrors(string name)
         {
@@ -25,6 +26,7 @@ namespace Cypher.Tests
         [TestCase("Cypher/CityLit")]
         [TestCase("Cypher/SkyGradient")]
         [TestCase("Cypher/NeonAdd")]
+        [TestCase("Cypher/NeonBoard")]
         [TestCase("Cypher/Rain")]
         public void ShaderHasNoFallbackErrorAndAMaterialCanUseIt(string name)
         {

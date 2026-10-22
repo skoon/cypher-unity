@@ -53,6 +53,38 @@ namespace Cypher.Tests
             }
         }
 
+        [TestCase("Performance", QualityPreset.Performance)]
+        [TestCase("low", QualityPreset.Low)]
+        [TestCase("MEDIUM", QualityPreset.Medium)]
+        [TestCase("High", QualityPreset.High)]
+        [TestCase("ultra", QualityPreset.Ultra)]
+        public void QualityPresetsAreParsedIgnoringCase(string text, QualityPreset expected)
+        {
+            BenchmarkOptions o = BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-quality", text });
+            Assert.AreEqual(expected, o.Quality);
+        }
+
+        [Test]
+        public void QualityDefaultsToWhateverTheSceneStartsWith()
+        {
+            Assert.IsNull(BenchmarkOptions.Parse(new[] { "--benchmark" }).Quality);
+        }
+
+        [TestCase("Ludicrous")]
+        [TestCase("2")]
+        [TestCase("Low, High")]
+        public void UnknownQualityPresetsFailLoudly(string text)
+        {
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-quality", text }));
+        }
+
+        [Test]
+        public void QualityWithoutTheBenchmarkFlagFailsLoudly()
+        {
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark-quality", "Low" }));
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-quality" }));
+        }
+
         [Test]
         public void ValueSwitchesWithoutTheBenchmarkFlagFailLoudly()
         {
@@ -69,6 +101,38 @@ namespace Cypher.Tests
             Assert.Catch<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-seconds", "0" }));
             Assert.Catch<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-warmup", "-3" }));
             Assert.Throws<ArgumentNullException>(() => BenchmarkOptions.Parse(null));
+        }
+
+        [Test]
+        public void TheRouteDefaultsToTheCentreLoop()
+        {
+            Assert.AreEqual(BenchmarkRoute.Centre, BenchmarkOptions.Parse(new[] { "--benchmark" }).Route);
+            Assert.AreEqual(BenchmarkRoute.Centre, BenchmarkOptions.Disabled.Route);
+        }
+
+        [TestCase("city", BenchmarkRoute.City)]
+        [TestCase("CITY", BenchmarkRoute.City)]
+        [TestCase("centre", BenchmarkRoute.Centre)]
+        public void TheRouteIsReadByName(string text, BenchmarkRoute expected)
+        {
+            Assert.AreEqual(expected, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", text }).Route);
+        }
+
+        [Test]
+        public void TheCityTourRecordsLongerUnlessToldOtherwise()
+        {
+            Assert.AreEqual(BenchmarkOptions.DefaultCityDurationSeconds, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "city" }).DurationSeconds);
+            Assert.AreEqual(BenchmarkOptions.DefaultDurationSeconds, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "centre" }).DurationSeconds);
+            Assert.AreEqual(90, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "city", "--benchmark-seconds", "90" }).DurationSeconds);
+            Assert.AreEqual(90, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-seconds", "90", "--benchmark-route", "city" }).DurationSeconds, "the order of the switches does not matter");
+        }
+
+        [Test]
+        public void ABadRouteFailsLoudly()
+        {
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "everywhere" }));
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route" }));
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark-route", "city" }));
         }
     }
 }

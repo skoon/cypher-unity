@@ -11,6 +11,7 @@ namespace Cypher.Tests
         {
             Gx = 2, Gz = 3, X = 10, Y = 5, Z = 20, Nx = nx, Nz = nz, Width = w, Height = h, Roll = roll,
             Shape = shape, Colour = new Rgb(1f, 0.5f, 0.25f), Gain = 2.5, FlickerMode = 3, Seed = 7.5, Chase = 0,
+            Cell = shape == NeonShape.Panel ? "word0" : null,
         };
 
         static MeshData Mesh(NeonQuad q)

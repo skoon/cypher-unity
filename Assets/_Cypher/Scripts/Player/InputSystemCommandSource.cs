@@ -12,47 +12,36 @@ namespace Cypher.Player
     }
 
     /// <summary>
-    /// Keyboard, mouse and gamepad bindings for the first-person controller, built in code so the
-    /// bindings live next to the logic that consumes them. Keys mirror the web prototype:
-    /// WASD / arrows, Space, Shift, Ctrl or C.
+    /// Keyboard, mouse and gamepad input for the first-person controller. The keyboard, mouse-button and gamepad-button controls come
+    /// from <see cref="InputBindings"/> (the defaults mirror the web prototype: WASD or arrows, Space, Shift, Ctrl or C) and are
+    /// rebuilt whenever the player changes them. Fixed: mouse movement and the right stick look, the left stick moves.
     /// </summary>
     public sealed class InputSystemCommandSource : IPlayerCommandSource, IDisposable
     {
         /// <summary>Right-stick look speed expressed as mouse pixels per second.</summary>
         public const double StickLookPixelsPerSecond = 900;
 
-        readonly InputAction _move = new InputAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+        readonly InputBindings _bindings;
         readonly InputAction _lookMouse = new InputAction("LookMouse", InputActionType.Value, "<Mouse>/delta", expectedControlType: "Vector2");
         readonly InputAction _lookStick = new InputAction("LookStick", InputActionType.Value, "<Gamepad>/rightStick", expectedControlType: "Vector2");
-        readonly InputAction _jump = new InputAction("Jump", InputActionType.Button);
-        readonly InputAction _sprint = new InputAction("Sprint", InputActionType.Button);
-        readonly InputAction _crouch = new InputAction("Crouch", InputActionType.Button);
 
-        public InputSystemCommandSource()
+        InputAction _move;
+        InputAction _jump;
+        InputAction _sprint;
+        InputAction _crouch;
+
+        public InputSystemCommandSource() : this(new InputBindings())
         {
-            _move.AddCompositeBinding("2DVector")
-                .With("Up", "<Keyboard>/w").With("Down", "<Keyboard>/s")
-                .With("Left", "<Keyboard>/a").With("Right", "<Keyboard>/d");
-            _move.AddCompositeBinding("2DVector")
-                .With("Up", "<Keyboard>/upArrow").With("Down", "<Keyboard>/downArrow")
-                .With("Left", "<Keyboard>/leftArrow").With("Right", "<Keyboard>/rightArrow");
-            _move.AddBinding("<Gamepad>/leftStick");
-
-            _jump.AddBinding("<Keyboard>/space");
-            _jump.AddBinding("<Gamepad>/buttonSouth");
-
-            _sprint.AddBinding("<Keyboard>/leftShift");
-            _sprint.AddBinding("<Keyboard>/rightShift");
-            _sprint.AddBinding("<Gamepad>/leftStickPress");
-
-            _crouch.AddBinding("<Keyboard>/leftCtrl");
-            _crouch.AddBinding("<Keyboard>/c");
-            _crouch.AddBinding("<Gamepad>/buttonEast");
-
-            foreach (InputAction a in All) a.Enable();
         }
 
-        InputAction[] All => new[] { _move, _lookMouse, _lookStick, _jump, _sprint, _crouch };
+        public InputSystemCommandSource(InputBindings bindings)
+        {
+            _bindings = bindings ?? throw new ArgumentNullException(nameof(bindings));
+            _lookMouse.Enable();
+            _lookStick.Enable();
+            BuildButtons();
+            _bindings.Changed += BuildButtons;
+        }
 
         public PlayerCommand Poll(double dt)
         {
@@ -70,7 +59,62 @@ namespace Cypher.Player
 
         public void Dispose()
         {
-            foreach (InputAction a in All) a.Dispose();
+            _bindings.Changed -= BuildButtons;
+            DisposeButtons();
+            _lookMouse.Dispose();
+            _lookStick.Dispose();
+        }
+
+        /// <summary>(Re)create the actions that depend on the player's controls from what <see cref="InputBindings"/> holds now.</summary>
+        void BuildButtons()
+        {
+            DisposeButtons();
+            BindingMap map = _bindings.Snapshot();
+
+            _move = new InputAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+            AddMovement(_move, map, BindingSlot.Primary);
+            AddMovement(_move, map, BindingSlot.Secondary);
+            _move.AddBinding("<Gamepad>/leftStick");
+
+            _jump = Button("Jump", map, GameAction.Jump);
+            _sprint = Button("Sprint", map, GameAction.Sprint);
+            _crouch = Button("Crouch", map, GameAction.Crouch);
+
+            _move.Enable();
+            _jump.Enable();
+            _sprint.Enable();
+            _crouch.Enable();
+        }
+
+        void DisposeButtons()
+        {
+            foreach (InputAction a in new[] { _move, _jump, _sprint, _crouch }) a?.Dispose();
+            _move = _jump = _sprint = _crouch = null;
+        }
+
+        /// <summary>One 2D-vector binding per slot, built from the four directions' controls in that slot; directions with none are left out.</summary>
+        static void AddMovement(InputAction move, BindingMap map, BindingSlot slot)
+        {
+            string up = map.Get(GameAction.MoveForward, slot), down = map.Get(GameAction.MoveBack, slot);
+            string left = map.Get(GameAction.MoveLeft, slot), right = map.Get(GameAction.MoveRight, slot);
+            if (up == null && down == null && left == null && right == null) return;
+
+            var composite = move.AddCompositeBinding("2DVector");
+            if (up != null) composite = composite.With("Up", up);
+            if (down != null) composite = composite.With("Down", down);
+            if (left != null) composite = composite.With("Left", left);
+            if (right != null) composite = composite.With("Right", right);
+        }
+
+        static InputAction Button(string name, BindingMap map, GameAction action)
+        {
+            var input = new InputAction(name, InputActionType.Button);
+            foreach (BindingSlot slot in new[] { BindingSlot.Primary, BindingSlot.Secondary, BindingSlot.Gamepad })
+            {
+                string path = map.Get(action, slot);
+                if (path != null) input.AddBinding(path);
+            }
+            return input;
         }
     }
 }

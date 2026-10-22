@@ -1,9 +1,11 @@
 using System.IO;
 using Cypher.City;
 using Cypher.Core;
+using Cypher.Game;
 using Cypher.Perf;
 using Cypher.Player;
 using Cypher.Rendering;
+using Cypher.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -25,6 +27,8 @@ namespace Cypher.EditorTools
         public const string SkyShaderName = "Cypher/SkyGradient";
         public const string NeonShaderName = "Cypher/NeonAdd";
         public const string RainShaderName = "Cypher/Rain";
+        public const string SteamShaderName = "Cypher/Steam";
+        public const string BoardShaderName = "Cypher/NeonBoard";
 
         public const string SettingsFolder = "Assets/_Cypher/Settings";
         public const string VolumeProfilePath = SettingsFolder + "/NightVolume.asset";
@@ -41,9 +45,16 @@ namespace Cypher.EditorTools
 
             Light moon = CreateMoon();
             GameObject camera = CreatePlayer();
+            FirstPersonController playerController = camera.transform.parent.GetComponent<FirstPersonController>();
+
+            // Where a new game starts; the player is parked here until the title screen is left.
+            var spawn = new GameObject("Spawn");
+            spawn.transform.position = camera.transform.parent.position;
 
             var cityGo = new GameObject("City");
-            cityGo.AddComponent<CityBuilder>().Configure(CityPlan.DefaultSeed, 1, mats);
+            var cityBuilder = cityGo.AddComponent<CityBuilder>();
+            cityBuilder.Configure(CityPlan.DefaultSeed, CityLayout.PlazaIndex, mats);   // the whole 7x7 city
+            cityBuilder.ConfigureLoading(buildOverFrames: true, budgetMilliseconds: 24f);   // behind the loading bar; about 70 frames, not 200: on a busy machine each frame costs more than the work in it
 
             var post = new GameObject("Post FX");
             var volume = post.AddComponent<UnityEngine.Rendering.Volume>();   // not Cypher.Core.Volume, the building massing type
@@ -51,28 +62,44 @@ namespace Cypher.EditorTools
             volume.sharedProfile = profile;
 
             var rendering = new GameObject("Rendering");
-            rendering.AddComponent<LowResController>();
+            var lowRes = rendering.AddComponent<LowResController>();
             var night = rendering.AddComponent<NightLighting>();
             night.Configure(moon, camera.GetComponent<Camera>(), sky, (float)NightRig.DefaultTimeOfDay, (float)NightRig.DefaultRain, (float)NightRig.DefaultFog);
             night.Apply();   // bakes ambient, fog and the moon into the scene; shader globals are re-applied on enable
 
             // Camera-following rain; on by default, switch it off with RainController.Raining.
             var rain = new GameObject("Rain");
-            rain.AddComponent<RainController>().Configure(camera.transform, rainMaterial, (float)NightRig.DefaultRain,
+            var rainController = rain.AddComponent<RainController>();
+            rainController.Configure(camera.transform, rainMaterial, (float)NightRig.DefaultRain,
                 (float)RainModel.DefaultWind, RainController.DefaultMaxParticles);
 
-            // One box-projected probe over the slice, captured once after the city exists.
-            Rect2 extent = CityWindow.AroundPlaza(1).RoadExtent;
+            // A box-projected probe per district, each captured once after the whole city exists (GameFlow asks for the capture).
             var probeGo = new GameObject("Street Reflection");
-            probeGo.AddComponent<StreetReflectionProbe>().Configure(
-                new Vector3((float)extent.CentreX, 6f, (float)extent.CentreZ),
-                new Vector3((float)extent.Width + 40f, 80f, (float)extent.Depth + 40f),
-                StreetReflectionProbe.DefaultResolution, captureAutomatically: true);
+            var street = probeGo.AddComponent<StreetReflectionProbe>();
+            street.Configure(
+                ProbeLayout.Build(CityWindow.AroundPlaza(CityLayout.PlazaIndex), ProbeLayout.DefaultPerAxis, WorldEdge.Apron),
+                StreetReflectionProbe.DefaultResolution, captureAutomatically: false);
+
+            // Applies the quality preset (resolution, MSAA, bloom, rain cap, probe size) and lowers it when frames miss the budget.
+            var quality = new GameObject("Quality");
+            quality.AddComponent<QualityDirector>().Configure(lowRes, rainController, street, volume);
 
             // Perf overlay (F3) and the --benchmark mode; the runner does nothing unless the flag is on the command line.
             var perf = new GameObject("Perf");
-            perf.AddComponent<PerfOverlay>();
+            var overlay = perf.AddComponent<PerfOverlay>();
             perf.AddComponent<BenchmarkRunner>();
+
+            // The title flight, the settings, and the flow that ties loading, title, playing and pausing together.
+            var titleRig = new GameObject("Title Camera");
+            var titleCamera = titleRig.AddComponent<TitleCamera>();
+            var game = new GameObject("Game");
+            var settings = game.AddComponent<Cypher.Game.SettingsService>();   // not UnityEditor.SettingsService
+            settings.Configure(quality.GetComponent<QualityDirector>(), camera.GetComponent<Camera>(), rainController, overlay, playerController);
+            var flow = game.AddComponent<GameFlow>();
+            flow.Configure(playerController, camera.transform, spawn.transform, titleCamera, quality.GetComponent<QualityDirector>(), cityBuilder, street);
+            var uiRoot = game.AddComponent<UiRoot>();
+            uiRoot.Configure(flow, settings);   // loading, title, pause, options, dialogs and the Esc key
+            game.AddComponent<UiShots>().Configure(uiRoot, flow, settings);   // only does anything with --shots DIR
 
             EditorSceneManager.MarkSceneDirty(scene);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -193,8 +220,54 @@ namespace Cypher.EditorTools
             if (neonShader == null) throw new FileNotFoundException($"Shader {NeonShaderName} not found; has it been imported?");
             var neon = Ensure("CityNeon", neonShader, m => m.SetFloat("_Brightness", 1f));
 
+            // The street props: one CityLit material for every kit (per-vertex surface), one alpha-blended for the decals, one for the steam.
+            var props = Ensure("CityProps", shader, m =>
+            {
+                m.SetFloat("_PropSurface", 1f);
+                m.SetColor("_BaseColor", Color.white);   // the grime texture and the vertex colours carry everything
+            });
+            var decals = Ensure("CityDecals", shader, m =>
+            {
+                m.SetFloat("_PropSurface", 2f);
+                m.SetColor("_BaseColor", Color.white);
+                m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                m.SetFloat("_ZWrite", 0f);
+                m.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
+                m.SetFloat("_OffsetFactor", -2f);   // a hair in front of the wall or the ground it lies on
+                m.SetFloat("_OffsetUnits", -2f);
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            });
+            Shader steamShader = Shader.Find(SteamShaderName);
+            if (steamShader == null) throw new FileNotFoundException($"Shader {SteamShaderName} not found; has it been imported?");
+            var steam = Ensure("CitySteam", steamShader, m =>
+            {
+                m.SetFloat("_Wind", 0.7f);
+                m.SetFloat("_FadeDistance", 60f);
+            });
+
+            // The LED hoardings (opaque) and the holograms (additive): one shader, told apart by _Holo.
+            Shader boardShader = Shader.Find(BoardShaderName);
+            if (boardShader == null) throw new FileNotFoundException($"Shader {BoardShaderName} not found; has it been imported?");
+            var boards = Ensure("CityBoards", boardShader, m =>
+            {
+                m.SetFloat("_Holo", 0f);
+                m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero);
+                m.SetFloat("_ZWrite", 1f);
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+            });
+            var holos = Ensure("CityHolos", boardShader, m =>
+            {
+                m.SetFloat("_Holo", 1f);
+                m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                m.SetFloat("_ZWrite", 0f);
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            });
+
             AssetDatabase.SaveAssets();
-            return new CityMaterials { Walls = walls, Roofs = roofs, Sidewalk = sidewalk, Road = road, Paint = paint, Metal = metal, Neon = neon };
+            return new CityMaterials { Walls = walls, Roofs = roofs, Sidewalk = sidewalk, Road = road, Paint = paint, Metal = metal, Neon = neon, Props = props, Decals = decals, Steam = steam, Boards = boards, Holos = holos };
         }
 
         static Material Ensure(string name, Shader shader, System.Action<Material> configure)
@@ -233,13 +306,14 @@ namespace Cypher.EditorTools
             var cam = go.AddComponent<Camera>();
             cam.fieldOfView = 70f;
             cam.nearClipPlane = 0.1f;
-            cam.farClipPlane = 1500f;   // the roadbed quad is ~1 km across
+            cam.farClipPlane = 520f;   // exp2 fog at its thinnest (density 0.0075) is opaque past ~350 m; the roadbed quad is ~1 km across but its far part is fog
             cam.clearFlags = CameraClearFlags.Skybox;   // set again by NightLighting
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
             go.AddComponent<AudioListener>();
 
             var so = new SerializedObject(controller);
             so.FindProperty("cameraPivot").objectReferenceValue = go.transform;
+            so.FindProperty("lockCursor").boolValue = false;   // GameFlow locks and frees the cursor
             so.ApplyModifiedPropertiesWithoutUndo();
             return go;
         }

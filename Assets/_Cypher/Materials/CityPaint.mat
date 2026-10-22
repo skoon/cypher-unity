@@ -37,16 +37,21 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _Cull: 2
     - _Cutoff: 0.5
+    - _DstBlend: 0
     - _GlassMetallic: 0.72
     - _GlassSmoothness: 0.84
     - _Metallic: 0.1
     - _OffsetFactor: -2
     - _OffsetUnits: -3
+    - _PropSurface: 0
     - _Smoothness: 0.3
+    - _SrcBlend: 1
     - _VertexEmission: 0.06
     - _WindowMix: 0
     - _WorldUV: 0
+    - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 1, g: 1, b: 1, a: 1}

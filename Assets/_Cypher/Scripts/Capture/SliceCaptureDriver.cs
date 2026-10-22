@@ -59,10 +59,21 @@ namespace Cypher.Capture
             Camera cam = Camera.main;
             if (cam == null) { Fail("no MainCamera in the Slice scene"); yield break; }
 
+            // Wait for loading to finish and start a game, so the camera rides the player and not the title flight.
+            var flow = FindFirstObjectByType<Cypher.Game.GameFlow>();
+            if (flow == null) { Fail("no GameFlow in the Slice scene"); yield break; }
+            float loadDeadline = Time.realtimeSinceStartup + SettleTimeout * 2;
+            while (flow.State != Cypher.Core.FlowState.Title && Time.realtimeSinceStartup < loadDeadline) yield return null;
+            if (!flow.NewGame()) { Fail($"the game never reached the title screen (state {flow.State})"); yield break; }
+
             // Stop the player controller driving the camera, then let frames pass so the probe, rain and
             // post effects settle. The first frames after a city build can draw with textures not yet uploaded.
             var controller = FindFirstObjectByType<FirstPersonController>();
             if (controller != null) controller.enabled = false;
+
+            // The capture sets its own resolution; the quality governor must not change it underneath.
+            var quality = FindFirstObjectByType<QualityDirector>();
+            if (quality != null) quality.enabled = false;
 
             var probe = FindFirstObjectByType<StreetReflectionProbe>();
             float deadline = Time.realtimeSinceStartup + SettleTimeout;
@@ -92,12 +103,61 @@ namespace Cypher.Capture
             var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default);
             rt.Create();
 
+            var dressing = FindFirstObjectByType<Cypher.City.PropDressing>();
             foreach (CapturePoses.Pose p in CapturePoses.All)
             {
                 cam.transform.SetPositionAndRotation(p.Position, Quaternion.Euler(p.Pitch, p.Yaw, 0f));
+                if (dressing != null) dressing.Refresh();   // the props of a far block are only switched on when the camera is near
                 yield return null;
                 yield return null;
                 SubmitAndSave(cam, rt, Path.Combine(dir, p.Name + ".png"));
+            }
+
+            // The signage: the hoarding, hologram, shop sign, plaque and blade nearest the plaza, each from a spot in front of it.
+            var city = FindFirstObjectByType<Cypher.City.CityBuilder>();
+            if (city != null && city.Slice != null)
+            {
+                Cypher.Core.NeonAtlasLayout atlas = Cypher.Core.NeonAtlas.Layout();
+                Cypher.Core.NeonLayout signs = Cypher.Core.NeonPlanner.Plan(city.Slice.Plan, city.Slice.Window, Cypher.Core.NeonPlanner.DefaultSeed, atlas);
+                foreach (Cypher.Core.SignShot shot in Cypher.Core.SignVantage.Pick(signs, atlas, city.Slice.Plan.IsBlocked))
+                {
+                    (double cx, double cy, double cz) = shot.CameraPosition(1.7);
+                    var from = new Vector3((float)cx, (float)cy, (float)cz);
+                    var target = new Vector3((float)shot.X, (float)shot.Y, (float)shot.Z);
+                    cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(target - from));
+                    if (dressing != null) dressing.Refresh();
+                    yield return null;
+                    yield return null;
+                    SubmitAndSave(cam, rt, Path.Combine(dir, shot.Name + ".png"));
+                }
+            }
+
+            // The steam: stand a few metres from where the first puff starts, looking at it, and take three pictures a second and a half
+            // apart (a puff is invisible when it is born and when it dies, so one picture can miss it).
+            if (city != null && city.Props != null && city.Props.Layout.Puffs.Count > 0)
+            {
+                Cypher.Core.SteamPuff puff = city.Props.Layout.Puffs[0];
+                var target = new Vector3((float)puff.X, (float)puff.Y + 1.2f, (float)puff.Z);
+                Vector3 from = target + new Vector3(3.2f, -0.6f, 3.2f);
+                from.y = Mathf.Max(from.y, 1.7f);
+                cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(target - from));
+                if (dressing != null) dressing.Refresh();
+                for (int shot = 1; shot <= 3; shot++)
+                {
+                    yield return new WaitForSecondsRealtime(1.5f);
+                    SubmitAndSave(cam, rt, Path.Combine(dir, $"steam_{shot}.png"));
+                }
+            }
+
+            // Back to the title through the pause screen, which also exercises the way out of a game, then a few points of its flight.
+            if (!flow.Pause() || !flow.ReturnToTitle()) { Fail($"could not return to the title (state {flow.State})"); yield break; }
+            var titleCamera = FindFirstObjectByType<Cypher.Game.TitleCamera>();
+            foreach (int seconds in new[] { 0, 20, 45, 70 })
+            {
+                titleCamera.SeekTo(seconds);
+                yield return null;
+                yield return null;
+                SubmitAndSave(cam, rt, Path.Combine(dir, $"title_{seconds:00}.png"));
             }
 
             Destroy(rt);

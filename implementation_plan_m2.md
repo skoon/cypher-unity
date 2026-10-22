@@ -1,24 +1,31 @@
-# Milestone 2: front end, whole city, living streets
+# Milestones 2 and 3: front end and whole city, then living streets
 
-Status: **draft for review, nothing started.** Decisions already made by you: whole 7x7 city built at load; population =
-pedestrians, traffic and aircraft, street props and signage, ambient audio; title is CYPHER with NIGHT SECTOR as the
-district; Options go all the way (graphics, audio, gameplay, controls with rebinding for keyboard/mouse and gamepad).
+Status: **approved 2026-10-20**, split into two milestones. **M2 = steps 1-8** (front end, options, whole city, props,
+signage; Gate A). **M3 = steps 9-13** (pedestrians, traffic, aircraft, ambient audio; Gate B). Decisions made by you:
+whole 7x7 city built at load; population = pedestrians, traffic and aircraft, street props and signage, ambient audio;
+title is CYPHER with NIGHT SECTOR as the district, sitting over the live city in a single scene; Options go all the way
+(graphics, audio, gameplay, controls with rebinding for keyboard/mouse and gamepad); product and company name Cypher; every
+other default in the decision list below accepted.
 
 ## Goal and exit criteria
 
+**Milestone 2 (steps 1-8)**
 1. Launching the player shows a loading bar, then a title screen over the live night city (New Game, Continue, Options,
    Quit). New Game drops you on the plaza. Esc pauses (Resume, Options, Return to Title, Quit), which also fixes the
    "no way to quit" gap.
 2. Options persist between runs and take effect immediately: quality preset + adaptive quality, internal height, window
    mode, vsync, FOV, per-bus volume, mouse sensitivity and invert-Y, full rebinding with conflict handling, reset to
-   defaults. Everything works with mouse, keyboard and gamepad.
-3. The whole 7x7 city is walkable, dressed with props and real signage, populated by pedestrians, ground traffic and
-   aircraft, with a rain-and-city soundscape.
-4. **Gates, measured in a Development player on this Vega 8 at 1080p window / 540p internal with the benchmark route:**
-   - **Gate A (after step 8):** whole city with props and signage, no population: p99 <= 33.3 ms.
-   - **Gate B (end):** the default tier, fully populated: p99 <= 33.3 ms. Every tier's p99 is recorded in
-     `performance_results.md`; tiers above the default may exceed the gate on this machine (the prototype said the same).
-5. Unit tests for all new logic; `unity-check.ps1 -Step All` green; results recorded.
+   defaults. Everything works with mouse, keyboard and gamepad. (The audio sliders are stored and shown but only drive the
+   mixer once M3 adds audio.)
+3. The whole 7x7 city is walkable, dressed with props and real signage.
+4. **Gate A, measured in a Development player on this Vega 8 at 1080p window / 540p internal with the benchmark route:**
+   whole city with props and signage, p99 <= 33.3 ms; time from launch to title recorded (target <= 10 s).
+5. Unit tests for all new logic; `unity-check.ps1 -Step All` green; results in `performance_results.md`.
+
+**Milestone 3 (steps 9-13)**
+6. Pedestrians, ground traffic and aircraft populate the city, with a rain-and-city soundscape wired to the audio sliders.
+7. **Gate B:** the default tier, fully populated: p99 <= 33.3 ms. Every tier's p99 is recorded; tiers above the default may
+   exceed the gate on this machine (the prototype said the same).
 
 ## What carries over from the prototype, and what is new
 
@@ -111,17 +118,14 @@ Sizes are relative (S/M/L). Each step ends with unit tests green and `-Step All`
   length are budgeted.
 - **Reflection probe over 434 m.** One box-projected probe may be too coarse; may need one per 3x3 region.
 
-## Open decisions (defaults are my recommendation; answer any you disagree with)
+## Decisions (resolved 2026-10-20)
 
-1. **One milestone with two gates (default) or split** into M2 = steps 1-8 and M3 = steps 9-13.
-2. **Title backdrop:** single scene with the live city behind the menu (default) vs a separate light Title scene.
-3. **Corrupt settings file:** rename to `.bad`, tell the user, continue with defaults (default) vs refuse to start.
-4. **Pedestrian rendering:** limb animation in the vertex shader, 1-2 draws (default) vs one instanced mesh per body part
-   like the prototype (14 draws, more CPU).
-5. **Lettering:** own stroke font so no OS font is needed (default) vs OS fonts for Latin.
-6. **UI typeface:** OS Consolas with logged fallback to the built-in font (default) vs the built-in font only.
-7. **Music:** out of M2, bus exists (default) vs include the adaptive score.
-8. **Player settings:** set product name to CYPHER (changes the window title and the settings folder from
-   `DefaultCompany/cypher-unity`); company name needed from you if you want something other than DefaultCompany.
-9. **Default tier on a fresh install:** decided by the Gate B measurements on this machine (default) vs the prototype's
-   fixed "Performance".
+1. **Two milestones:** M2 = steps 1-8, M3 = steps 9-13. (Changed from the default.)
+2. **Title backdrop:** single scene, live city behind the menu. (Default.)
+3. **Corrupt settings file:** set aside as `.bad` (a newer-version file as `.newer`), tell the user, continue with defaults.
+4. **Pedestrian rendering:** limb animation in the vertex shader, 1-2 draws.
+5. **Lettering:** own stroke font, no OS font.
+6. **UI typeface:** OS Consolas with logged fallback to the built-in font.
+7. **Music:** out of scope, the bus exists.
+8. **Player settings:** product name CYPHER, company name Cypher (so settings live in `...\LocalLow\Cypher\CYPHER`).
+9. **Default tier on a fresh install:** decided by the Gate B measurements on this machine; until then Medium is a placeholder.

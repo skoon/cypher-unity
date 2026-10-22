@@ -22,6 +22,36 @@ namespace Cypher.Tests
         static readonly Vector3 PlazaCentre = new Vector3(0f, 1f, 0f);
         static readonly Vector3 RoadNorthOfPlaza = new Vector3(0f, 1f, 31f);
 
+        [UnityEngine.TestTools.UnityTest]
+        public System.Collections.IEnumerator AFrameThatTookNoTimeIsSkippedNotSimulated()
+        {
+            // The first frame after unpausing switches the controller on in a frame whose delta is already zero.
+            _rig.PlaceAndSettle(PlazaCentre);
+            _rig.Player.AutoTick = true;
+            _rig.Input.Forward = 1;
+            Vector3 before = _rig.Player.transform.position;
+            float savedScale = Time.timeScale;
+            Time.timeScale = 0f;
+            try
+            {
+                yield return null;
+                yield return null;
+                yield return null;
+            }
+            finally
+            {
+                Time.timeScale = savedScale;
+            }
+            Assert.AreEqual(before.x, _rig.Player.transform.position.x, 1e-4f);
+            Assert.AreEqual(before.z, _rig.Player.transform.position.z, 1e-4f);
+        }
+
+        [Test]
+        public void AnExplicitTickWithNoTimeStillFailsLoudly()
+        {
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => _rig.Player.Tick(0f));
+        }
+
         [Test]
         public void SettlesOnThePlazaDeckAtKerbHeight()
         {

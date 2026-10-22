@@ -11,7 +11,7 @@ namespace Cypher.Core
         /// <summary>The same with a wider, softer halo.</summary>
         TubeSoft = 1,
 
-        /// <summary>Backlit sign face with procedural lettering bars, a frame, and a bright core.</summary>
+        /// <summary>Backlit sign face: lettering from the sign atlas (see <see cref="NeonAtlas"/>) with its halo and a bright core.</summary>
         Panel = 2,
 
         /// <summary>A row of marquee bulbs along the quad's width.</summary>
@@ -47,6 +47,37 @@ namespace Cypher.Core
 
         /// <summary>Tubes: chase segments along the length (0 = none). Panels and bulbs: ignored by the planner (the mesher fills in aspect or bulb count).</summary>
         public double Chase;
+
+        /// <summary>Panels: the name of the <see cref="NeonAtlas"/> cell holding the lettering. Required for a panel, ignored by every other shape.</summary>
+        public string Cell;
+    }
+
+    /// <summary>
+    /// A screen that plays one of the ad panels: an LED hoarding on a facade, or a free-floating projection. The face looks
+    /// along (Nx, 0, Nz); X, Y, Z is the middle of the lit area.
+    /// </summary>
+    public struct NeonBoard
+    {
+        public int Gx, Gz;
+        public double X, Y, Z;
+        public double Nx, Nz;
+        public double Width, Height;
+
+        /// <summary>Which of the <see cref="BoardArt.PanelCount"/> ad panels it plays.</summary>
+        public int Panel;
+
+        /// <summary>Linear tint; a screen is mostly neutral and only leans toward the district hue.</summary>
+        public Rgb Colour;
+
+        public double Seed;
+
+        /// <summary>How hard the picture tears sideways during a glitch (1 is the prototype's usual).</summary>
+        public double Glitch;
+
+        /// <summary>How fast the ticker band along the bottom scrolls, in panel widths per second.</summary>
+        public double TickerSpeed;
+
+        public double Gain;
     }
 
     /// <summary>
@@ -86,5 +117,11 @@ namespace Cypher.Core
     {
         public readonly List<NeonQuad> Quads = new List<NeonQuad>();
         public readonly List<NeonBox> Boxes = new List<NeonBox>();
+
+        /// <summary>LED hoardings: opaque screens set into a frame on tall street facades.</summary>
+        public readonly List<NeonBoard> Boards = new List<NeonBoard>();
+
+        /// <summary>Free-floating additive projections hung over the streets.</summary>
+        public readonly List<NeonBoard> Holograms = new List<NeonBoard>();
     }
 }

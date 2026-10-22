@@ -42,6 +42,7 @@ namespace Cypher.Perf
 
         FirstPersonController _player;
         StreetReflectionProbe _probe;
+        QualityDirector _quality;
         RenderCounters _counters;
         BenchmarkPilot _pilot;
         BenchmarkRecorder _recorder;
@@ -103,14 +104,31 @@ namespace Cypher.Perf
             Application.targetFrameRate = -1;
             Application.runInBackground = true;      // a window that lost focus must not pause the run
 
+            PinQuality();
+
             _counters = new RenderCounters();
             _timings = new FrameTiming[1];
-            _pilot = new BenchmarkPilot(BenchmarkPilot.DefaultRoute, _player.Sensitivity);
+            _pilot = new BenchmarkPilot(BenchmarkPilot.Route(_options.Route), _player.Sensitivity);
             _player.CommandSource = new PilotCommandSource(_player, _pilot);
             _recorder = new BenchmarkRecorder();
 
             State = Phase.Warmup;
-            Debug.Log($"[Cypher] benchmark: {_options.WarmupSeconds:0.#} s warm-up, then {_options.DurationSeconds:0.#} s recorded, results in {_outputDirectory}");
+            Debug.Log($"[Cypher] benchmark: {_options.Route} route, {_options.WarmupSeconds:0.#} s warm-up, then {_options.DurationSeconds:0.#} s recorded, results in {_outputDirectory}");
+        }
+
+        /// <summary>A benchmark measures one preset: adaptive quality off, and the requested preset if one was given.</summary>
+        void PinQuality()
+        {
+            _quality = FindFirstObjectByType<QualityDirector>();
+            if (_quality == null)
+            {
+                if (_options.Quality.HasValue) throw new InvalidOperationException($"{BenchmarkOptions.QualityFlag} needs a QualityDirector in the scene.");
+                return;
+            }
+            GraphicsOptions g = _quality.Options;
+            g.AdaptiveQuality = false;
+            if (_options.Quality.HasValue) g.Quality = _options.Quality.Value;
+            _quality.Apply(g);
         }
 
         void OnDestroy()
@@ -136,6 +154,7 @@ namespace Cypher.Perf
             if (State == Phase.Idle || State == Phase.Done) return;
             double dt = Time.unscaledDeltaTime;
             if (dt <= 0) return;
+            if (State == Phase.Warmup && !_player.isActiveAndEnabled) return;   // still loading: the flow has not started the game
 
             if (_frame++ == 0)
             {
@@ -232,10 +251,13 @@ namespace Cypher.Perf
                 Pair("cpu", $"{SystemInfo.processorType}, {SystemInfo.systemMemorySize} MB"),
                 Pair("window", $"{Screen.width}x{Screen.height}, {Screen.fullScreenMode}"),
                 Pair("internal_height", lowRes != null ? Mathf.RoundToInt(Screen.height * lowRes.CurrentScale).ToString() : "native"),
-                Pair("quality", QualitySettings.names[QualitySettings.GetQualityLevel()]),
+                Pair("quality", _quality != null ? $"{_quality.Preset}, adaptive {(_quality.Adaptive ? "on" : "off")}" : "no QualityDirector"),
+                Pair("msaa", _quality != null ? _quality.MsaaSamples + "x" : "n/a"),
+                Pair("unity_quality_level", QualitySettings.names[QualitySettings.GetQualityLevel()]),
                 Pair("vsync", QualitySettings.vSyncCount.ToString()),
                 Pair("city_build_ms", city != null ? city.BuildMilliseconds.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) : "n/a"),
-                Pair("first_frame_s", _firstFrameAt.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
+                Pair("launch_to_play_s", _firstFrameAt.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
+                Pair("route", _options.Route.ToString().ToLowerInvariant()),
                 Pair("warmup_s", _options.WarmupSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)),
                 Pair("route_laps", _pilot.Laps.ToString()),
                 Pair("route_waypoints_reached", _pilot.WaypointsReached.ToString()),

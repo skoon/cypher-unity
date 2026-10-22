@@ -6,13 +6,25 @@ namespace Cypher.Core
     /// <summary>The meshes for one grid cell's signage.</summary>
     public sealed class NeonCellMeshes
     {
-        /// <summary>Additive emissive quads. Colour is the linear tint; Uv1 = (seed, mode + 8 * shape, extra, gain).</summary>
+        /// <summary>
+        /// Additive emissive quads. Colour is the linear tint; Uv1 = (seed, mode + 8 * shape, extra, gain). Panel quads carry the texture
+        /// coordinates of their lettering in the sign atlas; every other shape has 0 to 1 across the quad.
+        /// </summary>
         public MeshData Emissive = new MeshData();
 
         /// <summary>Dark housings behind signs and fittings, plain vertex-coloured boxes.</summary>
         public MeshData Housing = new MeshData();
 
-        public int TriangleCount => Emissive.TriangleCount + Housing.TriangleCount;
+        /// <summary>
+        /// LED hoardings, one quad each. Colour is the linear tint; Uv1 = (seed, glitch, ticker speed, gain); the texture coordinates
+        /// are those of the panel's art in the board atlas (see <see cref="BoardArt.AtlasUv"/>).
+        /// </summary>
+        public MeshData Boards = new MeshData();
+
+        /// <summary>Floating projections, built the same way as <see cref="Boards"/> and drawn additively.</summary>
+        public MeshData Holos = new MeshData();
+
+        public int TriangleCount => Emissive.TriangleCount + Housing.TriangleCount + Boards.TriangleCount + Holos.TriangleCount;
     }
 
     /// <summary>Turns a <see cref="NeonLayout"/> into per-cell mesh data.</summary>
@@ -24,17 +36,24 @@ namespace Cypher.Core
         /// <summary>Shapes are packed into the flicker-mode channel as mode + ShapeStride * shape.</summary>
         public const int ShapeStride = 8;
 
-        public static Dictionary<(int Gx, int Gz), NeonCellMeshes> Build(NeonLayout layout)
+        /// <param name="atlas">Where the lettering is, for the panel quads. Defaults to the standard atlas.</param>
+        public static Dictionary<(int Gx, int Gz), NeonCellMeshes> Build(NeonLayout layout, NeonAtlasLayout atlas = null)
         {
             if (layout == null) throw new ArgumentNullException(nameof(layout));
+            atlas = atlas ?? NeonAtlas.Layout();
 
             var quads = new Dictionary<(int, int), QuadBuilder>();
             foreach (NeonQuad q in layout.Quads)
             {
                 (int, int) key = (q.Gx, q.Gz);
-                if (!quads.TryGetValue(key, out QuadBuilder qb)) quads.Add(key, qb = new QuadBuilder());
+                if (!quads.TryGetValue(key, out QuadBuilder qb)) quads.Add(key, qb = new QuadBuilder(atlas));
                 qb.Add(q);
             }
+
+            var boards = new Dictionary<(int, int), BoardBuilder>();
+            var holos = new Dictionary<(int, int), BoardBuilder>();
+            AddBoards(layout.Boards, boards);
+            AddBoards(layout.Holograms, holos);
 
             var boxes = new Dictionary<(int, int), MeshBuilder>();
             foreach (NeonBox b in layout.Boxes)
@@ -51,10 +70,27 @@ namespace Cypher.Core
             }
             foreach (KeyValuePair<(int, int), MeshBuilder> kv in boxes)
             {
-                if (!result.TryGetValue(kv.Key, out NeonCellMeshes cell)) result[kv.Key] = cell = new NeonCellMeshes();
-                cell.Housing = kv.Value.Build();
+                Cell(result, kv.Key).Housing = kv.Value.Build();
             }
+            foreach (KeyValuePair<(int, int), BoardBuilder> kv in boards) Cell(result, kv.Key).Boards = kv.Value.Build();
+            foreach (KeyValuePair<(int, int), BoardBuilder> kv in holos) Cell(result, kv.Key).Holos = kv.Value.Build();
             return result;
+        }
+
+        static NeonCellMeshes Cell(Dictionary<(int Gx, int Gz), NeonCellMeshes> result, (int, int) key)
+        {
+            if (!result.TryGetValue(key, out NeonCellMeshes cell)) result[key] = cell = new NeonCellMeshes();
+            return cell;
+        }
+
+        static void AddBoards(List<NeonBoard> boards, Dictionary<(int, int), BoardBuilder> into)
+        {
+            foreach (NeonBoard b in boards)
+            {
+                (int, int) key = (b.Gx, b.Gz);
+                if (!into.TryGetValue(key, out BoardBuilder bb)) into.Add(key, bb = new BoardBuilder());
+                bb.Add(b);
+            }
         }
 
         /// <summary>
@@ -106,12 +142,18 @@ namespace Cypher.Core
         /// <summary>Accumulates emissive quads with the extra per-vertex parameter channel.</summary>
         sealed class QuadBuilder
         {
+            readonly NeonAtlasLayout _atlas;
             readonly List<float> _p = new List<float>();
             readonly List<float> _n = new List<float>();
             readonly List<float> _t = new List<float>();
             readonly List<float> _c = new List<float>();
             readonly List<float> _u1 = new List<float>();
             readonly List<int> _i = new List<int>();
+
+            public QuadBuilder(NeonAtlasLayout atlas)
+            {
+                _atlas = atlas;
+            }
 
             public void Add(NeonQuad q)
             {
@@ -150,7 +192,7 @@ namespace Cypher.Core
                 float modeAndShape = q.FlickerMode + ShapeStride * (int)q.Shape;
                 int baseIndex = _p.Count / 3;
                 V3[] vs = { a, b, c, d };
-                float[] uv = { 0, 0, 1, 0, 1, 1, 0, 1 };
+                float[] uv = q.Shape == NeonShape.Panel ? LetteringUv(q) : new float[] { 0, 0, 1, 0, 1, 1, 0, 1 };
                 for (int k = 0; k < 4; k++)
                 {
                     _p.Add((float)vs[k].X); _p.Add((float)vs[k].Y); _p.Add((float)vs[k].Z);
@@ -161,6 +203,23 @@ namespace Cypher.Core
                 }
                 _i.Add(baseIndex); _i.Add(baseIndex + 1); _i.Add(baseIndex + 2);
                 _i.Add(baseIndex); _i.Add(baseIndex + 2); _i.Add(baseIndex + 3);
+            }
+
+            /// <summary>
+            /// The corners' texture coordinates in the atlas cell. The quad's right-hand edge runs the way a viewer in front of the face sees
+            /// its left (Unity's axes are the mirror of the prototype's, which the city keeps), so the lettering is read from the right.
+            /// </summary>
+            float[] LetteringUv(NeonQuad q)
+            {
+                if (q.Cell == null) throw new ArgumentException("a sign panel needs an atlas cell");
+                (double u, double v, double du, double dv) = _atlas[q.Cell].Uv(_atlas.Size);
+                return new[]
+                {
+                    (float)(u + du), (float)v,
+                    (float)u, (float)v,
+                    (float)u, (float)(v + dv),
+                    (float)(u + du), (float)(v + dv),
+                };
             }
 
             /// <summary>Tubes carry their chase segments, panels their aspect ratio, bulbs their count.</summary>
@@ -176,6 +235,60 @@ namespace Cypher.Core
             }
 
             static V3 Scale(V3 v, double k) => new V3(v.X * k, v.Y * k, v.Z * k);
+
+            public MeshData Build() => new MeshData
+            {
+                Positions = _p.ToArray(),
+                Normals = _n.ToArray(),
+                Uvs = _t.ToArray(),
+                Colors = _c.ToArray(),
+                Uv1 = _u1.ToArray(),
+                Indices = _i.ToArray(),
+            };
+        }
+
+        /// <summary>Accumulates screens, one quad each, wound like the emissive quads.</summary>
+        sealed class BoardBuilder
+        {
+            readonly List<float> _p = new List<float>();
+            readonly List<float> _n = new List<float>();
+            readonly List<float> _t = new List<float>();
+            readonly List<float> _c = new List<float>();
+            readonly List<float> _u1 = new List<float>();
+            readonly List<int> _i = new List<int>();
+
+            public void Add(NeonBoard b)
+            {
+                if (!(b.Width > 0) || !(b.Height > 0)) throw new ArgumentException("a board needs a positive size");
+                if (b.Panel < 0 || b.Panel >= BoardArt.PanelCount) throw new ArgumentException($"there is no board panel {b.Panel}");
+                double len = Math.Sqrt(b.Nx * b.Nx + b.Nz * b.Nz);
+                if (len < 1e-9) throw new ArgumentException("a board faces nowhere");
+                double nx = b.Nx / len, nz = b.Nz / len;
+                double hw = b.Width / 2, hh = b.Height / 2;
+                double rx = nz, rz = -nx;   // right = (nz, 0, -nx), as for the emissive quads
+
+                V3[] corners =
+                {
+                    new V3(b.X - rx * hw, b.Y - hh, b.Z - rz * hw),
+                    new V3(b.X + rx * hw, b.Y - hh, b.Z + rz * hw),
+                    new V3(b.X + rx * hw, b.Y + hh, b.Z + rz * hw),
+                    new V3(b.X - rx * hw, b.Y + hh, b.Z - rz * hw),
+                };
+                // the picture is read from the right of that axis, as for the lettering
+                double[] lu = { 1, 0, 0, 1 }, lv = { 0, 0, 1, 1 };
+                int baseIndex = _p.Count / 3;
+                for (int k = 0; k < 4; k++)
+                {
+                    (double u, double v) = BoardArt.AtlasUv(b.Panel, lu[k], lv[k]);
+                    _p.Add((float)corners[k].X); _p.Add((float)corners[k].Y); _p.Add((float)corners[k].Z);
+                    _n.Add((float)nx); _n.Add(0f); _n.Add((float)nz);
+                    _t.Add((float)u); _t.Add((float)v);
+                    _c.Add(b.Colour.R); _c.Add(b.Colour.G); _c.Add(b.Colour.B);
+                    _u1.Add((float)b.Seed); _u1.Add((float)b.Glitch); _u1.Add((float)b.TickerSpeed); _u1.Add((float)b.Gain);
+                }
+                _i.Add(baseIndex); _i.Add(baseIndex + 1); _i.Add(baseIndex + 2);
+                _i.Add(baseIndex); _i.Add(baseIndex + 2); _i.Add(baseIndex + 3);
+            }
 
             public MeshData Build() => new MeshData
             {

@@ -38,13 +38,19 @@ namespace Cypher.Core
         /// <summary>Dark metal housings behind the signage.</summary>
         public MeshData Housings = new MeshData();
 
+        /// <summary>The LED hoardings (see <see cref="NeonCellMeshes.Boards"/>).</summary>
+        public MeshData Boards = new MeshData();
+
+        /// <summary>The floating holograms (see <see cref="NeonCellMeshes.Holos"/>).</summary>
+        public MeshData Holos = new MeshData();
+
         public readonly List<Aabb> Colliders = new List<Aabb>();
         public int BuildingCount;
 
         /// <summary>World Y of the highest point in the chunk (sidewalk deck or a building roof).</summary>
         public double MaxY;
 
-        public int TriangleCount => Walls.TriangleCount + Roofs.TriangleCount + Sidewalk.TriangleCount + Neon.TriangleCount + Housings.TriangleCount;
+        public int TriangleCount => Walls.TriangleCount + Roofs.TriangleCount + Sidewalk.TriangleCount + Neon.TriangleCount + Housings.TriangleCount + Boards.TriangleCount + Holos.TriangleCount;
     }
 
     /// <summary>The meshes for a window of the city: per-cell chunks plus road paint.</summary>
@@ -80,46 +86,15 @@ namespace Cypher.Core
 
         public static CitySlice Build(CityPlan plan, CityWindow window, bool includeNeon = true)
         {
-            if (plan == null) throw new ArgumentNullException(nameof(plan));
-
+            var job = new CityChunkJob(plan, window);
             var slice = new CitySlice { Plan = plan, Window = window };
-
-            var buildingsByCell = new Dictionary<(int, int), List<Building>>();
-            foreach (Building b in plan.Buildings)
-            {
-                (int, int) key = (b.Lot.Gx, b.Lot.Gz);
-                if (!buildingsByCell.TryGetValue(key, out List<Building> list))
-                {
-                    list = new List<Building>();
-                    buildingsByCell.Add(key, list);
-                }
-                list.Add(b);
-            }
-
-            foreach (StreetCell cell in plan.Streets)
-            {
-                if (!window.Contains(cell.Gx, cell.Gz)) continue;
-                slice.Chunks.Add(BuildChunk(cell, buildingsByCell.TryGetValue((cell.Gx, cell.Gz), out List<Building> bs) ? bs : null));
-            }
-
-            var paint = new MeshBuilder();
-            StreetMesher.AddMarkings(paint, window);
-            slice.Markings = paint.Build();
-
-            if (includeNeon)
-            {
-                var neon = NeonMesher.Build(NeonPlanner.Plan(plan, window));
-                foreach (CityChunk chunk in slice.Chunks)
-                {
-                    if (!neon.TryGetValue((chunk.Gx, chunk.Gz), out NeonCellMeshes meshes)) continue;
-                    chunk.Neon = meshes.Emissive;
-                    chunk.Housings = meshes.Housing;
-                }
-            }
+            foreach (StreetCell cell in job.Cells) slice.Chunks.Add(job.BuildChunk(cell));
+            slice.Markings = job.BuildMarkings();
+            if (includeNeon) job.AttachNeon(slice.Chunks, job.MeshNeon(job.PlanNeon()));
             return slice;
         }
 
-        static CityChunk BuildChunk(StreetCell cell, List<Building> buildings)
+        internal static CityChunk BuildChunk(StreetCell cell, List<Building> buildings)
         {
             var chunk = new CityChunk { Gx = cell.Gx, Gz = cell.Gz };
 
@@ -162,6 +137,78 @@ namespace Cypher.Core
                 z0 = Math.Min(z0, p.Z); z1 = Math.Max(z1, p.Z);
             }
             return new Rect2(x0, z0, x1, z1);
+        }
+    }
+
+    /// <summary>
+    /// The same work as <see cref="CityChunker.Build"/>, one piece at a time, so a caller can spread it over frames and report
+    /// progress. Pieces are independent apart from neon, which is planned for the whole window in one pass (one random
+    /// stream, consumed wall by wall) and then attached to the chunks.
+    /// </summary>
+    public sealed class CityChunkJob
+    {
+        readonly CityWindow _window;
+        readonly Dictionary<(int, int), List<Building>> _buildingsByCell = new Dictionary<(int, int), List<Building>>();
+
+        public CityPlan Plan { get; }
+        public CityWindow Window => _window;
+
+        /// <summary>The cells inside the window, in the plan's order.</summary>
+        public IReadOnlyList<StreetCell> Cells { get; }
+
+        public CityChunkJob(CityPlan plan, CityWindow window)
+        {
+            Plan = plan ?? throw new ArgumentNullException(nameof(plan));
+            _window = window;
+
+            foreach (Building b in plan.Buildings)
+            {
+                (int, int) key = (b.Lot.Gx, b.Lot.Gz);
+                if (!_buildingsByCell.TryGetValue(key, out List<Building> list))
+                {
+                    list = new List<Building>();
+                    _buildingsByCell.Add(key, list);
+                }
+                list.Add(b);
+            }
+
+            var cells = new List<StreetCell>();
+            foreach (StreetCell cell in plan.Streets)
+            {
+                if (window.Contains(cell.Gx, cell.Gz)) cells.Add(cell);
+            }
+            Cells = cells;
+        }
+
+        public CityChunk BuildChunk(StreetCell cell)
+        {
+            if (cell == null) throw new ArgumentNullException(nameof(cell));
+            if (!_window.Contains(cell.Gx, cell.Gz)) throw new ArgumentOutOfRangeException(nameof(cell), $"cell ({cell.Gx},{cell.Gz}) is outside the window");
+            return CityChunker.BuildChunk(cell, _buildingsByCell.TryGetValue((cell.Gx, cell.Gz), out List<Building> bs) ? bs : null);
+        }
+
+        public MeshData BuildMarkings()
+        {
+            var paint = new MeshBuilder();
+            StreetMesher.AddMarkings(paint, _window);
+            return paint.Build();
+        }
+
+        /// <param name="atlas">Where the sign lettering is; defaults to the standard atlas.</param>
+        public NeonLayout PlanNeon(NeonAtlasLayout atlas = null) => NeonPlanner.Plan(Plan, _window, NeonPlanner.DefaultSeed, atlas);
+
+        public Dictionary<(int Gx, int Gz), NeonCellMeshes> MeshNeon(NeonLayout layout, NeonAtlasLayout atlas = null) => NeonMesher.Build(layout, atlas);
+
+        public void AttachNeon(IEnumerable<CityChunk> chunks, Dictionary<(int Gx, int Gz), NeonCellMeshes> neon)
+        {
+            foreach (CityChunk chunk in chunks)
+            {
+                if (!neon.TryGetValue((chunk.Gx, chunk.Gz), out NeonCellMeshes meshes)) continue;
+                chunk.Neon = meshes.Emissive;
+                chunk.Housings = meshes.Housing;
+                chunk.Boards = meshes.Boards;
+                chunk.Holos = meshes.Holos;
+            }
         }
     }
 }
