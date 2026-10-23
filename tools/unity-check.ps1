@@ -5,6 +5,7 @@
 #   powershell -File tools/unity-check.ps1 -Step Play
 #   powershell -File tools/unity-check.ps1 -Step Capture -CaptureDir D:\shots [-ScreenHeight 1080]
 #   powershell -File tools/unity-check.ps1 -Step Player      (Build scene, then a Windows Development player in Builds\Dev)
+#   powershell -File tools/unity-check.ps1 -Step Player -Release -PlayerDir D:\source\cypher-unity\Builds\Release   (the same without the Development flag: optimised scripts)
 #   powershell -File tools/unity-check.ps1 -Step Benchmark   (run that player with --benchmark, print the results)
 #   powershell -File tools/unity-check.ps1 -Step Perf        (Player, then Benchmark)
 #   powershell -File tools/unity-check.ps1 -Step Shots       (run that player with --shots: a screenshot of every menu screen)
@@ -14,6 +15,7 @@
 # Capture and PlayMode use the GPU (no -nographics); Build and EditMode run with -nographics.
 # Edit and Play accept -TestFilter <semicolon-separated names or patterns> to run only some tests, e.g. -TestFilter Cypher.Tests.UiScreenTests
 # Benchmark -Quality Performance|Low|Medium|High|Ultra pins that preset (adaptive quality is always off in a benchmark).
+# Benchmark -NoCrowd leaves the streets empty: the control for what the people cost. -NoTraffic leaves the roads and the sky empty: the control for what the traffic costs; -NoVehicleLights keeps the traffic and takes the point lights off the vehicles. -NoAudio switches every sound off: the control for what the audio costs.
 # Benchmark -Route centre|city picks the loop (centre is the M1 loop round the plaza; city tours every edge: use -BenchmarkSeconds 240).
 # Benchmark opens a borderless window of -Width x -Height for about warm-up + duration seconds; leave the machine alone meanwhile.
 # Exit codes of the player: 0 passed the 30 FPS gate, 1 failed it, 2 an exception, 3 invalid run (the character did not walk).
@@ -30,6 +32,11 @@ param(
     [int]$WarmupSeconds = 10,
     [string]$Quality = '',
     [string]$Route = '',
+    [switch]$NoCrowd,
+    [switch]$NoTraffic,
+    [switch]$NoVehicleLights,
+    [switch]$NoAudio,
+    [switch]$Release,
     [string]$TestFilter = '',
     [string]$ShotsDir = '',
     [string]$Unity = 'D:\source\Unity\6000.6.6f1\Editor\Unity.exe'
@@ -42,12 +49,12 @@ if (-not $PlayerDir) { $PlayerDir = Join-Path $project 'Builds\Dev' }
 if (-not $BenchmarkDir) { $BenchmarkDir = Join-Path $logs 'benchmark' }
 if (-not $ShotsDir) { $ShotsDir = Join-Path $logs 'shots' }
 
-function Invoke-Unity([string[]]$UnityArgs, [string]$Log) {
+function Invoke-Unity([string[]]$UnityArgs, [string]$Log, [int]$Seconds = $TimeoutSeconds) {
     $p = Start-Process -FilePath $Unity -ArgumentList $UnityArgs -PassThru -NoNewWindow
     $null = $p.Handle   # without this, ExitCode reads as null after WaitForExit
-    if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
+    if (-not $p.WaitForExit($Seconds * 1000)) {
         # A hung editor would block forever, and its import workers keep the project locked: kill the whole tree.
-        Write-Host "  TIMEOUT after $TimeoutSeconds s: killing Unity (pid $($p.Id)) and its workers"
+        Write-Host "  TIMEOUT after $Seconds s: killing Unity (pid $($p.Id)) and its workers"
         & taskkill /PID $p.Id /T /F | Out-Null
         return 124
     }
@@ -82,7 +89,8 @@ function Step-Tests([string]$Mode) {
     $a = @('-batchmode', '-projectPath', $project, '-runTests', '-testPlatform', $Mode, '-testResults', $xml, '-logFile', "$logs\$Mode.log")
     if ($Mode -eq 'EditMode') { $a += '-nographics' }
     if ($TestFilter) { $a += @('-testFilter', $TestFilter) }
-    $code = Invoke-Unity $a "$logs\$Mode.log"
+    # the PlayMode suite is several minutes of scenes and sounds (the audio tests alone wait out seconds of real time each): give it room
+    $code = Invoke-Unity $a "$logs\$Mode.log" ([Math]::Max($TimeoutSeconds, 1800))
     return ((Show-Results $xml) -and $code -eq 0)
 }
 
@@ -101,7 +109,9 @@ function Step-Player {
     Write-Host '== Development player'
     if (-not (Step-Build)) { return $false }
     $exe = Join-Path $PlayerDir 'Cypher.exe'
-    $code = Invoke-Unity @('-batchmode', '-quit', '-projectPath', $project, '-executeMethod', 'Cypher.EditorTools.PlayerBuilder.BuildFromCommandLine', '-buildOutput', $exe, '-logFile', "$logs\player-build.log") "$logs\player-build.log"
+    $buildArgs = @('-batchmode', '-quit', '-projectPath', $project, '-executeMethod', 'Cypher.EditorTools.PlayerBuilder.BuildFromCommandLine', '-buildOutput', $exe, '-logFile', "$logs\player-build.log")
+    if ($Release) { $buildArgs += '-buildRelease' }
+    $code = Invoke-Unity $buildArgs "$logs\player-build.log"
     Write-Host "  exit $code, $exe $(if (Test-Path $exe) { 'exists' } else { 'MISSING' })"
     return ($code -eq 0 -and (Test-Path $exe))
 }
@@ -121,6 +131,10 @@ function Step-Benchmark {
         '-logFile', (Quote "$logs\player.log"))
     if ($Quality) { $a += @('--benchmark-quality', $Quality) }
     if ($Route) { $a += @('--benchmark-route', $Route) }
+    if ($NoCrowd) { $a += '--no-crowd' }
+    if ($NoTraffic) { $a += '--no-traffic' }
+    if ($NoVehicleLights) { $a += '--no-vehicle-lights' }
+    if ($NoAudio) { $a += '--no-audio' }
     $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru
     $null = $p.Handle
     if (-not $p.WaitForExit(($WarmupSeconds + $BenchmarkSeconds + 120) * 1000)) {

@@ -123,6 +123,12 @@ namespace Cypher.City
         /// <summary>Whether this builder dresses the streets: it is switched on and has the three materials.</summary>
         public bool BuildsProps => props && materials.HasProps;
 
+        /// <summary>Where the neon tubes, hoardings and holograms are (their centres), for the sound they make; empty without signs.</summary>
+        public IReadOnlyList<Vector3> NeonSources { get; private set; } = Array.Empty<Vector3>();
+
+        /// <summary>Where the rooftop air-conditioning, fans and vents are, for the sound they make; empty without props.</summary>
+        public IReadOnlyList<Vector3> MachineSources { get; private set; } = Array.Empty<Vector3>();
+
         /// <summary>CPU time the build took in total, wherever it stopped for a frame: planning, textures, meshes and colliders.</summary>
         public double BuildMilliseconds { get; private set; }
 
@@ -270,6 +276,11 @@ namespace Cypher.City
             if (neon)
             {
                 NeonLayout layout = job.PlanNeon(atlas);
+                var sources = new List<Vector3>(layout.Quads.Count + layout.Boards.Count + layout.Holograms.Count);
+                foreach (NeonQuad q in layout.Quads) sources.Add(new Vector3((float)q.X, (float)q.Y, (float)q.Z));
+                foreach (NeonBoard b in layout.Boards) sources.Add(new Vector3((float)b.X, (float)b.Y, (float)b.Z));
+                foreach (NeonBoard h in layout.Holograms) sources.Add(new Vector3((float)h.X, (float)h.Y, (float)h.Z));
+                NeonSources = sources;
                 _progress.Set(StepSignage, 0.5);
                 EndStage(StepSignage);
                 _work.Stop(); yield return null; _work.Start(); stage.Restart();
@@ -345,6 +356,12 @@ namespace Cypher.City
                 double waited = waiting.Elapsed.TotalMilliseconds;
                 if (bake.IsFaulted) ExceptionDispatchInfo.Capture(bake.Exception.GetBaseException()).Throw();
                 PropBake baked = bake.Result;
+                var machines = new List<Vector3>();
+                foreach (PropInstance p in baked.Layout.Instances)
+                {
+                    if (p.Kit == "acunit" || p.Kit == "roofunit" || p.Kit == "ventstack") machines.Add(new Vector3((float)p.X, (float)p.Y, (float)p.Z));
+                }
+                MachineSources = machines;
                 IEnumerator dressing = DressTheStreets(baked);
                 int blocks = 0;
                 while (dressing.MoveNext())
@@ -408,6 +425,8 @@ namespace Cypher.City
             Dressing = null;
             Props = null;
             PropColliderCount = 0;
+            NeonSources = Array.Empty<Vector3>();
+            MachineSources = Array.Empty<Vector3>();
             foreach (UnityEngine.Object o in _owned)
             {
                 if (o) DestroyObject(o);

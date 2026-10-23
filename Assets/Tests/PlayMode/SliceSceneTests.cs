@@ -26,7 +26,7 @@ namespace Cypher.Tests
         {
             // Never read or write the player's real settings file, and never inherit switches from the test runner's command line.
             SettingsService.StorageFactory = () => new MemorySettingsStorage();
-            LaunchOptions.Override = new FlowOptions();
+            LaunchOptions.Override = new FlowOptions(noAudio: true);
         }
 
         [TearDown]

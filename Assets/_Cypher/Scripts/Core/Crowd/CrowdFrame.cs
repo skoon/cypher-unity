@@ -1,0 +1,203 @@
+using System;
+using System.Runtime.InteropServices;
+
+namespace Cypher.Core
+{
+    /// <summary>
+    /// One pedestrian as the GPU reads it: 80 bytes in a structured buffer, laid out as the pedestrian shader's <c>PedInstance</c>. Positions, heading and phase are
+    /// already interpolated to the frame; colours are sRGB hex (0xRRGGBB) that the shader turns linear.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PedestrianGpuData
+    {
+        public const int Size = 80;
+
+        public const uint FlagLongCoat = 1, FlagUmbrella = 2, FlagHood = 4, FlagPack = 8, FlagTrim = 16;
+
+        // float4 a
+        public float X, Y, Z, Heading;
+
+        // float4 b
+        public float Phase, Speed, Scale, Build;
+
+        // float4 c
+        public float LookYaw, LookSeed, TrimPower, Spare;
+
+        // uint4 colours
+        public uint Coat, Skin, Pants, Trim;
+
+        // uint4 extra
+        public uint Umbrella, Flags, Spare0, Spare1;
+    }
+
+    /// <summary>A view frustum as six inward-facing planes (a x + b y + c z + d >= 0 is inside), for cheap sphere tests.</summary>
+    public sealed class Frustum
+    {
+        readonly double[] _planes = new double[24];
+
+        /// <summary>Set plane <paramref name="index"/> (0 to 5): its unit normal pointing into the frustum, and its offset.</summary>
+        public void SetPlane(int index, double nx, double ny, double nz, double d)
+        {
+            if (index < 0 || index > 5) throw new ArgumentOutOfRangeException(nameof(index), index, "a frustum has six planes");
+            _planes[index * 4] = nx; _planes[index * 4 + 1] = ny; _planes[index * 4 + 2] = nz; _planes[index * 4 + 3] = d;
+        }
+
+        /// <summary>Whether a sphere is at least partly inside every plane.</summary>
+        public bool IntersectsSphere(double x, double y, double z, double radius)
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                double dist = _planes[i * 4] * x + _planes[i * 4 + 1] * y + _planes[i * 4 + 2] * z + _planes[i * 4 + 3];
+                if (dist < -radius) return false;
+            }
+            return true;
+        }
+
+        /// <summary>A frustum that contains everything (nothing set yet is nothing to be outside of).</summary>
+        public static Frustum Everything()
+        {
+            var f = new Frustum();
+            for (int i = 0; i < 6; i++) f.SetPlane(i, 0, 1, 0, 1e9);
+            return f;
+        }
+    }
+
+    /// <summary>
+    /// Turns the simulation's people into one frame's instance data: leaves out whoever is out of view, interpolates between the last two steps, decides each person's
+    /// level of detail (with hysteresis, so nobody flickers between bodies on a boundary) and sorts them into three runs, near, middle and far, ready for three draws.
+    /// Pure computation: a Unity component hands the result to the GPU.
+    /// </summary>
+    public sealed class CrowdFrame
+    {
+        /// <summary>People whose bounding sphere (this radius, centred 1.5 m up) touches the frustum are drawn.</summary>
+        public const double CullRadius = 3;
+
+        /// <summary>A person has to move this far past a distance threshold before their level of detail changes.</summary>
+        public const double Hysteresis = 6;
+
+        /// <summary>The head's smoothing: a fifth of the way a frame at 60 frames a second (the prototype's 0.12 a frame), scaled to the real frame time.</summary>
+        public const double LookSmoothing = 0.12;
+
+        const byte Unknown = 255;
+
+        PedestrianGpuData[] _data = Array.Empty<PedestrianGpuData>();
+        byte[] _lod = Array.Empty<byte>();
+        int[][] _byLod = { Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>() };
+        readonly int[] _count = new int[3];
+        readonly int[] _cursor = new int[3];
+
+        /// <summary>The instances, nearest run first: <see cref="Count"/> says how many of each level of detail, in order. Only the first <see cref="Total"/> entries are meaningful.</summary>
+        public PedestrianGpuData[] Data => _data;
+
+        public int Total { get; private set; }
+
+        /// <summary>How many of the visible people are at a level of detail (0 full, 1 simple, 2 silhouette).</summary>
+        public int Count(RigLod lod)
+        {
+            CheckLod(lod);
+            return _count[(int)lod];
+        }
+
+        /// <summary>Where a level of detail's run starts in <see cref="Data"/>.</summary>
+        public int Start(RigLod lod)
+        {
+            CheckLod(lod);
+            int start = 0;
+            for (int i = 0; i < (int)lod; i++) start += _count[i];
+            return start;
+        }
+
+        static void CheckLod(RigLod lod)
+        {
+            if ((int)lod < 0 || (int)lod > 2) throw new ArgumentOutOfRangeException(nameof(lod), lod, "unknown level of detail");
+        }
+
+        /// <param name="alpha">How far between the last two simulation steps this frame falls, 0 to 1.</param>
+        /// <param name="time">Seconds, for the head's slow wandering look.</param>
+        /// <param name="dt">The frame time, for the head's smoothing.</param>
+        /// <param name="near">People closer than this are drawn as the full rig; beyond <paramref name="far"/>, as a box.</param>
+        public void Build(CrowdSim sim, Frustum view, double camX, double camZ, double alpha, double time, double dt, double near, double far)
+        {
+            if (sim == null) throw new ArgumentNullException(nameof(sim));
+            if (view == null) throw new ArgumentNullException(nameof(view));
+            if (!(alpha >= 0 && alpha <= 1)) throw new ArgumentOutOfRangeException(nameof(alpha), alpha, "the interpolation runs from 0 to 1");
+            if (!(near > 0) || !(far > near)) throw new ArgumentOutOfRangeException(nameof(far), far, "the detail distances must run near < far");
+
+            int pool = sim.Pool.Count;
+            if (_data.Length < pool)
+            {
+                _data = new PedestrianGpuData[pool];
+                int before = _lod.Length;
+                Array.Resize(ref _lod, pool);
+                for (int i = before; i < pool; i++) _lod[i] = Unknown;
+                for (int i = 0; i < 3; i++) _byLod[i] = new int[pool];
+            }
+
+            _count[0] = _count[1] = _count[2] = 0;
+            var active = sim.Active;
+            double lookK = 1 - Math.Pow(1 - LookSmoothing, Math.Max(0, dt) * 60);
+            for (int i = 0; i < active.Count; i++)
+            {
+                Pedestrian p = active[i];
+                double x = p.PrevX + (p.X - p.PrevX) * alpha;
+                double z = p.PrevZ + (p.Z - p.PrevZ) * alpha;
+                double y = p.PrevY + (p.Y - p.PrevY) * alpha;
+                if (!view.IntersectsSphere(x, y + CullRadius * 0.5, z, CullRadius)) continue;
+
+                double dx = x - camX, dz = z - camZ;
+                // someone seen for the first time has no previous level to be loyal to
+                int previous = _lod[p.Index];
+                int lod = previous == Unknown ? DistanceLod(Math.Sqrt(dx * dx + dz * dz), near, far, 1, 0) : DistanceLod(Math.Sqrt(dx * dx + dz * dz), near, far, previous, Hysteresis);
+                _lod[p.Index] = (byte)lod;
+                _byLod[lod][_count[lod]++] = i;
+
+                if (lod == 0)
+                {
+                    double heading = p.PrevHeading + CrowdSim.ShortestAngle(p.PrevHeading, p.Heading) * alpha;
+                    double target = PedestrianPose.LookTarget(heading, x, z, true, camX, camZ, time, p.LookSeed);
+                    p.LookYaw += (target - p.LookYaw) * lookK;
+                }
+            }
+
+            _cursor[0] = 0;
+            _cursor[1] = _count[0];
+            _cursor[2] = _count[0] + _count[1];
+            Total = _count[0] + _count[1] + _count[2];
+            for (int lod = 0; lod < 3; lod++)
+            {
+                for (int k = 0; k < _count[lod]; k++) Fill(ref _data[_cursor[lod]++], active[_byLod[lod][k]], alpha);
+            }
+        }
+
+        static void Fill(ref PedestrianGpuData d, Pedestrian p, double alpha)
+        {
+            PedestrianAppearance a = p.Appearance;
+            d.X = (float)(p.PrevX + (p.X - p.PrevX) * alpha);
+            d.Y = (float)(p.PrevY + (p.Y - p.PrevY) * alpha);
+            d.Z = (float)(p.PrevZ + (p.Z - p.PrevZ) * alpha);
+            d.Heading = (float)(p.PrevHeading + CrowdSim.ShortestAngle(p.PrevHeading, p.Heading) * alpha);
+            d.Phase = (float)(p.PrevPhase + (p.Phase - p.PrevPhase) * alpha);
+            d.Speed = (float)p.Speed;
+            d.Scale = (float)a.Scale;
+            d.Build = (float)a.Build;
+            d.LookYaw = (float)p.LookYaw;
+            d.LookSeed = (float)p.LookSeed;
+            d.TrimPower = (float)a.TrimPower;
+            d.Spare = 0;
+            d.Coat = a.Coat; d.Skin = a.Skin; d.Pants = a.Pants; d.Trim = a.TrimColour;
+            d.Umbrella = a.UmbrellaColour;
+            d.Flags = (a.LongCoat ? PedestrianGpuData.FlagLongCoat : 0u) | (a.Umbrella ? PedestrianGpuData.FlagUmbrella : 0u) | (a.Hood ? PedestrianGpuData.FlagHood : 0u)
+                | (a.Pack ? PedestrianGpuData.FlagPack : 0u) | (a.Trim ? PedestrianGpuData.FlagTrim : 0u);
+            d.Spare0 = d.Spare1 = 0;
+        }
+
+        /// <summary>The level of detail for a distance (the prototype's distanceLod): 0 near, 1 middle, 2 far, with hysteresis about both thresholds.</summary>
+        public static int DistanceLod(double distance, double near, double far, int previous, double hysteresis)
+        {
+            if (previous == 0 && distance <= near + hysteresis) return 0;
+            if (previous == 2 && distance >= far - hysteresis) return 2;
+            if (distance < near - (previous > 0 ? hysteresis : 0)) return 0;
+            return distance > far + (previous < 2 ? hysteresis : 0) ? 2 : 1;
+        }
+    }
+}

@@ -313,7 +313,7 @@ namespace Cypher.UI
         readonly List<VisualElement> _tabButtons = new List<VisualElement>();
         readonly ScrollView _scroll = new ScrollView(ScrollViewMode.Vertical);
         readonly MenuButton _reset = new MenuButton("RESET", compact: true);
-        readonly MenuButton _back = new MenuButton("BACK", compact: true);
+        readonly MenuButton _back = new MenuButton("BACK", compact: true) { ActivateSound = UiSound.Back };
         readonly FocusGrid _grid;
         IVisualElementScheduledItem _saveTimer;
         bool _dirty;

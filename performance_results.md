@@ -159,6 +159,116 @@ without the glow washes round the hoardings and holograms 70.9 FPS (the real bui
 with one texture read per sign pixel, which is no dearer. Each block gains at most two more renderers (hoardings, holograms), so up to 60 more draw calls over the whole city and
 a dozen in view.
 
+## Pedestrians, a checkpoint (Milestone 3, step 10, 2026-10-22)
+
+The people: up to 400 in the pool, 36 / 60 / 110 / 320 / 400 walking on the five tiers (the prototype's budgets), simulated at 60 Hz on the CPU and posed entirely in the vertex shader.
+Each frame the people in view are written into one 80-byte-a-person buffer and drawn in one instanced draw per level of detail (the full rig out to 42 m, a rigid four-part body to 92 m, a box beyond; Performance 25 and 55 m) plus one
+for the contact shadows: **three or four draw calls for the whole crowd**, whatever its size. The full rig is 706 triangles (917 vertices); the cheap bodies 56 and 12.
+
+Measured the way the tiers were: the plaza loop, 60 s, Development player, 1080p borderless, each tier's own preset, **the machine quiet** (CPU 5 to 24% before each run), the same build with and without
+people (`--no-crowd`), alternating back to back. The loop stays near the plaza, so it never has more than about a hundred people in view.
+
+| Tier (people) | With people: FPS / p99 ms / GPU ms | Without: FPS / p99 ms / GPU ms | In view with people (full / simple / boxes) |
+|---|---|---|---|
+| Performance (36) | 152.2 / 8.7 / 5.7 | 149.4 / 9.3 / 5.8 | 0 / 2 / 11 |
+| Medium (110), first pair | 100.4 / 14.3 / 9.0 | 110.1 / 12.5 / 8.4 | 5 / 6 / 25 |
+| Medium (110), second pair | 106.0 / 13.0 / 8.6 | 111.2 / 11.9 / 8.3 | 4 / 4 / 27 |
+| High (320) | 87.2 / 15.1 / 10.5 | 88.1 / 15.6 / 10.5 | 11 / 28 / 56 |
+| Ultra (400) | 80.9 / 16.6 / 11.4 | 80.9 / 17.1 / 11.4 | 13 / 30 / 68 |
+
+The whole-city tour (first 100 s plus warm-up, Medium, the same alternation, twice each) says the same on a longer and more varied route: **127.1 and 127.1 FPS with the 110 people (p99 12.5 and 11.8 ms, GPU
+7.0 ms) against 127.6 and 128.1 without (p99 12.0 and 11.3 ms, GPU 7.0 ms)**, 200 draw calls against 197, 211 k triangles against 209 k. Over the tour 10 to 50 people were in view at a time (2 to 8 of them in the full rig), one
+person was solid for a moment, and there was one 46 ms frame in the first run (and an 82 ms one without people in the first control run, so those hitches are not the crowd's).
+
+**The crowd costs next to nothing here.** At Performance, High and Ultra the runs with and without people are within the noise (the people even read slightly faster at Performance); at Medium the people cost about
+0.5 to 0.9 ms a frame (4 to 10 FPS at 100 to 110 FPS). Draw calls go up by three or four, triangles by 1 to 2.5% (Ultra: +11 k on 587 k). Launch to the first playing frame is 7.0 to 7.3 s, unchanged. The CPU
+side (the simulation, the culling and sort, 80 bytes a visible person) was not timed on its own: it is inside the frame times above, and the Medium difference of under a millisecond is the most it can be there.
+It is written not to allocate per step (pooled neighbour lists, reused buffers), which has not been measured either.
+
+What this does not say: the loop shows few people at a time. Gate B's route (step 13) goes through the streets, where a hundred people can be in view, and adds traffic; that is the measurement that counts. The cheap
+bodies and boxes are what keep it cheap: of the 400 on Ultra only about 110 are in view, and only 13 of those get the full rig.
+
+## Traffic and aircraft, a checkpoint (Milestone 3, step 11, 2026-10-23)
+
+The vehicles: a fleet of 96 and 36 aircraft, of which 18 / 30 / 52 / 74 / 96 vehicles and 5 / 12 / 20 / 28 / 36 aircraft are in use on Performance to Ultra (the prototype's budgets), simulated at 60 Hz on the CPU
+and placed entirely in the vertex shaders. Each frame the ones in view are written into two buffers of 48 bytes a vehicle and drawn in **at most twelve draw calls whatever their number**: a hull draw for each of
+the four vehicle types in view (and two for aircraft), one for all the wheels, one for the glow (lamps, under-glow and headlight cones), one for the shadows, one for the aircraft's glow, one for the 768 signal
+lenses and one for the 256 signal masts. The nearest vehicles in view (six; two on Performance) carry real point lights. Hulls are 24 to 32 triangles, a wheel 36, a bike with its rider 148;
+the masts and lenses are 18,432 triangles that are always there.
+
+Measured as the pedestrians were: the plaza loop (60 s) and the whole-city tour (100 s), Development player, 1080p borderless, each tier's own preset, with and without the traffic (`--no-traffic`; the people are in both),
+alternating back to back; the machine quiet (CPU 1 to 13% before each run unless said). **One trap, found the hard way:** `unity-check.ps1 -Step Benchmark` runs the player already built, so a benchmark after a code
+change needs `-Step Player` first; my first set of numbers was of the old player with the people only, and showed no difference at all.
+
+| Run | With traffic: FPS / p99 ms / GPU ms / draws | Without: FPS / p99 ms / GPU ms / draws | In view (vehicles and aircraft) |
+|---|---|---|---|
+| Performance, plaza | 153.7 / 8.2 / 5.6 / 281 (CPU was 54% before) | 136.4 / 11.2 / 6.3 / 271 | 4 and 0 |
+| Medium, plaza | 85.2 / 16.2 / 10.7 / 306 | 91.0 / 15.6 / 10.0 / 295 | 13 and 3 |
+| High, plaza | 70.7 / 18.2 / 13.1 / 316 | 71.7 / 18.6 / 12.2 / 301 (one 2.6 s hitch) | 14 and 3 |
+| Ultra, plaza | 64.9 / 22.0 / 14.3 / 328 | 68.3 / 20.3 / 13.5 / 316 | 20 and 4 |
+| Medium, city tour (twice) | 98.3 and 98.8 / 16.0 and 14.7 / 9.2 and 9.0 / 248 and 214 | 108.4 and 107.7 / 13.4 and 13.3 / 8.2 and 8.2 / 202 and 203 | 23 and 2, 9 and 3 |
+
+A second set, cleaner, to see what the point lights cost (traffic with the lights, with the traffic but no lights `--no-vehicle-lights`, and no traffic; two pairs each):
+
+| Run | Traffic with its lights | Traffic, no lights | No traffic |
+|---|---|---|---|
+| Medium, city tour | 106.6 and 104.5 FPS; GPU 8.30 and 8.54 ms | 109.3 and 105.9; 8.12 and 8.39 | 109.7 and 108.4; 8.07 and 8.17 |
+| Ultra, plaza | 67.8 and 68.4 FPS; GPU 13.68 and 13.58 ms | 69.2 and 69.7; 13.36 and 13.28 | 70.2 and 70.9; 13.18 and 13.07 |
+
+**What it costs:** between about 0.3 and 1 ms of GPU a frame, 3 to 10% of the frame rate, at every tier (the cleaner set says the low end: 3% and 0.3 ms at Medium on the tour, 3.5% and 0.5 ms at Ultra on the
+plaza). The point lights are about half to 60% of it; the rest is the 10 to 12 extra draws, 20 to 40 thousand extra triangles (half of them the signals), and the blending of the cones, the under-glow and the shadows.
+Launch to the first playing frame is unchanged at 6.7 to 7.3 s. The CPU side was not measured apart: the whole of the traffic's simulation is under a millisecond for 96 vehicles (the fast loop steps ten simulated
+minutes of 400 people and 96 vehicles in a few seconds).
+
+What this does not say: the plaza loop shows only 4 to 20 vehicles at a time, and the tour 9 to 23. Gate B's route (step 13) goes through the streets with the crowd and the traffic together; that is the measurement
+that counts, and where the tiers' budgets are trimmed. The knobs are the lights (two on Performance already), and the number of vehicles.
+
+## Ambient audio, a checkpoint (Milestone 3, step 12, 2026-10-23)
+
+The sound is mostly **live synthesis on the audio thread**: the bed (about 70 nodes: noise loops, oscillators for the slow modulators, filters and gains) with a neon buzz and an air-conditioning unit on their own sources, the
+score's pad, delay and sidechain, an engine and tyres for each of the five nearest cars, and the master glue and limiter. What can be made ahead is made at load: 317 one-shot clips (menu sounds, footsteps on six surfaces at
+three paces and wetnesses, jumps, landings, breaths, the ambient one-shots) rendered on two worker threads while the city builds, then turned into `AudioClip`s a few a frame. Notes of the score are rendered a second ahead and
+queued by sample. Nothing synthesises on the main thread.
+
+Measured the way the actors were: the Development player (Mono), 1080p borderless, Medium, the plaza loop (60 s) and the whole-city tour (100 s), with and without sound (`--no-audio`), alternating back to back, the
+machine quiet (CPU 1 to 28% before each run; 53% before the first of set A and 87% before one run of set C, which had no sound). The first set (A) was before the nearest-sign search was given a spatial grid; B and C are after, C after the cheaper compressor and oscillator loops.
+
+| Run | With sound: FPS / p99 ms / GPU ms | Without: FPS / p99 ms / GPU ms |
+|---|---|---|
+| Plaza loop, set A (twice) | 77.5 and 75.7 / 19.6 and 22.4 / 11.5 and 11.6 | 80.9 and 78.7 / 19.3 and 20.8 / 11.0 and 11.3 |
+| Plaza loop, set B (twice) | 82.6 and 86.5 / 17.0 and 17.3 / 11.0 and 10.5 | 90.8 and 89.0 / 15.7 and 16.2 / 10.0 and 10.2 |
+| Plaza loop, set C (twice) | 83.1 and 88.7 / 19.0 and 15.6 / 10.8 and 10.2 | 84.3 and 90.0 / 18.4 and 15.8 / 10.7 and 10.1 |
+| City tour, set B | 103.2 / 13.5 / 8.7 | 114.5 / 13.2 / 7.9 |
+| City tour, set C | 100.4 / 15.5 / 8.9 | 110.1 / 13.2 / 8.2 |
+
+**What it costs:** between 1 and 10% of the frame rate on this machine, no more than about a millisecond of frame time (the tour's CPU frame time is 9.96 ms with sound against 9.08 without), and nothing near the gate
+(30 FPS, 33.3 ms). Hitches: over the six plaza-loop runs of each kind, 22 frames went over the 33.3 ms budget with sound and 11 without (of about 27,600 each; the worst 96 ms with, 69 ms without), and none on the
+tour either way, so the loop is noisy and the sound may add a few.
+
+Where it goes, from the engine's own counters (a status line every 15 s in the log; `AudioEngine.Cost`):
+
+| Where | Cost | Notes |
+|---|---|---|
+| Audio thread, total | **5.6 to 5.8 ms of every 21.3 ms block (26 to 27%)** | was 6.3 ms (30%) before the cheaper compressor and oscillator loops; a release (non-development) player measured 6.05 ms against the development player's 6.3 at that point, so it is the loops and not debug code |
+| the bed and its two emitters | 3.0 ms | 25 oscillators, 47 gains, 17 filters, 9 noise loops: a few hundred small node runs a block |
+| the score | 0.85 ms | |
+| five car voices | 1.15 ms | a car's engine and tyres, 0.23 ms each |
+| master glue and limiter | 0.63 ms | was 0.87 ms |
+| worst single piece in a block | 7 to 12 ms | one piece's worst callback, not the sum; nothing here detects a missed block, and nobody has listened for crackle yet |
+| Main thread | **0.16 to 0.18 ms a frame** (worst 17 to 27 ms, once, at the start of a game) | was 0.96 ms: the nearest-sign search scanned every tube and vent in the city each frame (0.62 ms); it is a grid now |
+| Clips in memory | 27.1 MB | 317 clips |
+| Load | 4.5 to 5.5 s of worker time, 47 to 58 ms of main thread to make the clips | launch to the first playing frame 7.3 to 8.3 s with sound against 6.7 to 8.2 without, about half a second more on average, as the workers share the cores with the city build |
+
+The engine's own work on the main thread explains only a part of the frame-rate cost: the frame loses 0.1 to 1 ms more than the 0.17 ms, and the GPU time reads 0.1 to 0.8 ms higher with sound on although nothing on
+the GPU changes. My reading (not proved) is that this laptop's processor and graphics share one power and cache budget, and the audio thread's quarter of a core is paid for there. If so, the audio thread's cost is worth
+keeping down as well as the main thread's.
+
+**Levers, if Gate B needs them** (none pulled): fewer car voices (each is 0.23 ms), the neon and air-conditioning sources off on Performance, the bed's filter coefficients refreshed every 128 frames instead of 32,
+slow modulators computed once per 32 frames and interpolated (they are about a fifth of the bed), and an IL2CPP player, which this project has not built and which should run the synthesis loops several times faster than Mono.
+
+What this does not say: IL2CPP, other hardware, and the populated route of Gate B (step 13), where the crowd, traffic and sound all run together. The audio cost does not grow with the crowd or traffic (it is five cars and the
+nearest walkers' footsteps whatever the population), so what step 13 adds is the other costs' sum.
+
 ## Startup and the flow (Milestone 2, step 3, 2026-10-20)
 
 A normal launch of the Development player on this machine (1280x720 window): the engine is up and Boot ends at 4.4 s, loading

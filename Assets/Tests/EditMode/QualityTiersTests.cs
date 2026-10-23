@@ -35,6 +35,26 @@ namespace Cypher.Tests
                 QualityTiers.All.Select(t => t.Bloom).ToArray());
             Assert.AreEqual(new[] { 1000, 2000, 3000, 3000, 4500 }, QualityTiers.All.Select(t => t.RainParticleCap).ToArray());
             Assert.AreEqual(new[] { 64, 128, 128, 256, 256 }, QualityTiers.All.Select(t => t.ProbeResolution).ToArray());
+            Assert.AreEqual(new[] { 36, 60, 110, 320, 400 }, QualityTiers.All.Select(t => t.Pedestrians).ToArray(), "the prototype's pedestrian budgets");
+            Assert.AreEqual(new[] { 25.0, 42.0, 42.0, 42.0, 42.0 }, QualityTiers.All.Select(t => t.ActorNear).ToArray());
+            Assert.AreEqual(new[] { 55.0, 92.0, 92.0, 92.0, 92.0 }, QualityTiers.All.Select(t => t.ActorFar).ToArray());
+            Assert.AreEqual(new[] { 18, 30, 52, 74, 96 }, QualityTiers.All.Select(t => t.GroundVehicles).ToArray(), "the prototype's ground traffic budgets");
+            Assert.AreEqual(new[] { 5, 12, 20, 28, 36 }, QualityTiers.All.Select(t => t.AircraftCount).ToArray(), "the prototype's aircraft budgets");
+            Assert.AreEqual(new[] { 2, 6, 6, 6, 6 }, QualityTiers.All.Select(t => t.VehicleLights).ToArray());
+        }
+
+        [Test]
+        public void TheCrowdPoolIsAsBigAsTheBiggestTier()
+        {
+            Assert.AreEqual(QualityTiers.MaxPedestrians, QualityTiers.All.Max(t => t.Pedestrians));
+        }
+
+        [Test]
+        public void TheTrafficFleetIsAsBigAsTheBiggestTier()
+        {
+            Assert.AreEqual(QualityTiers.MaxGroundVehicles, QualityTiers.All.Max(t => t.GroundVehicles));
+            Assert.AreEqual(QualityTiers.MaxAircraft, QualityTiers.All.Max(t => t.AircraftCount));
+            Assert.AreEqual(QualityTiers.MaxVehicleLights, QualityTiers.All.Max(t => t.VehicleLights));
         }
 
         [Test]
@@ -48,6 +68,12 @@ namespace Cypher.Tests
                 Assert.GreaterOrEqual((int)hi.Bloom, (int)lo.Bloom, hi.Preset + " bloom");
                 Assert.GreaterOrEqual(hi.RainParticleCap, lo.RainParticleCap, hi.Preset + " rain");
                 Assert.GreaterOrEqual(hi.ProbeResolution, lo.ProbeResolution, hi.Preset + " probe");
+                Assert.GreaterOrEqual(hi.Pedestrians, lo.Pedestrians, hi.Preset + " pedestrians");
+                Assert.GreaterOrEqual(hi.GroundVehicles, lo.GroundVehicles, hi.Preset + " vehicles");
+                Assert.GreaterOrEqual(hi.AircraftCount, lo.AircraftCount, hi.Preset + " aircraft");
+                Assert.GreaterOrEqual(hi.VehicleLights, lo.VehicleLights, hi.Preset + " vehicle lights");
+                Assert.GreaterOrEqual(hi.ActorNear, lo.ActorNear, hi.Preset + " near detail distance");
+                Assert.GreaterOrEqual(hi.ActorFar, lo.ActorFar, hi.Preset + " far detail distance");
             }
         }
 
@@ -86,6 +112,15 @@ namespace Cypher.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 99, 128));
             Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 100));
             Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 8));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, pedestrians: -1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, pedestrians: QualityTiers.MaxPedestrians + 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, groundVehicles: -1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, groundVehicles: QualityTiers.MaxGroundVehicles + 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, aircraftCount: QualityTiers.MaxAircraft + 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, vehicleLights: QualityTiers.MaxVehicleLights + 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, actorNear: 5));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, actorNear: 50, actorFar: 50));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new QualityTier(ok, 540, 1, BloomQuality.Fast, 1000, 128, actorFar: double.PositiveInfinity));
         }
 
         [Test]

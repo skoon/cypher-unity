@@ -6,6 +6,8 @@
         "Cypher.Capture",
         "Cypher.City",
         "Cypher.Game",
+        "Cypher.Actors",
+        "Cypher.Audio",
         "Cypher.Perf",
         "Cypher.Player",
         "Cypher.Rendering",

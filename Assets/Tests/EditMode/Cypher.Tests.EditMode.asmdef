@@ -5,7 +5,10 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Cypher.Core",
+        "Cypher.Editor",
         "Cypher.City",
+        "Cypher.Actors",
+        "Cypher.Audio",
         "Cypher.Rendering"
     ],
     "includePlatforms": [

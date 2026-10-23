@@ -1,0 +1,47 @@
+// Runs the vehicle shaders' placement maths (VehiclePose.hlsl) over a list of vertices and vehicles and writes where each lands, so a PlayMode test can compare the GPU with the
+// C# reference (Cypher.Core.VehiclePlacement) vertex for vertex. Not used by the game.
+#pragma kernel Place
+
+#include "VehiclePose.hlsl"
+
+// What to place (a dispatch does one): 0 body, 1 wheel (four slots a vehicle), 2 aircraft body, 3 ground glow, 4 aircraft glow, 5 shadow.
+#define PROBE_BODY 0
+#define PROBE_WHEEL 1
+#define PROBE_AIRCRAFT 2
+#define PROBE_GLOW 3
+#define PROBE_AIRCRAFT_GLOW 4
+#define PROBE_SHADOW 5
+
+StructuredBuffer<VehicleInstance> _Vehicles;
+StructuredBuffer<float4> _Vertices;   // xyz: position in the part's frame; w: the glow part, for the glow
+RWStructuredBuffer<float4> _Out;      // xyz: world position; w: 1 if the part exists, else 0 (a bike's third and fourth wheels)
+float _Time;
+uint _Mode;
+uint _VertexCount;
+uint _InstanceCount;
+
+[numthreads(64, 1, 1)]
+void Place(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _VertexCount * _InstanceCount) return;
+    uint instance = i / _VertexCount;
+    uint vertex = i % _VertexCount;
+    float3 p = _Vertices[vertex].xyz;
+    uint part = (uint)(_Vertices[vertex].w + 0.5);
+
+    float3 world;
+    float present = 1.0;
+    if (_Mode == PROBE_WHEEL)
+    {
+        bool exists;
+        world = VehWheelWorld(p, _Vehicles[instance >> 2], instance & 3u, exists);
+        present = exists ? 1.0 : 0.0;
+    }
+    else if (_Mode == PROBE_BODY) world = VehBodyWorld(p, _Vehicles[instance]);
+    else if (_Mode == PROBE_AIRCRAFT) world = AirBodyWorld(p, _Vehicles[instance]);
+    else if (_Mode == PROBE_GLOW) world = VehGlowWorld(p, part, _Vehicles[instance], _Time);
+    else if (_Mode == PROBE_AIRCRAFT_GLOW) world = AirGlowWorld(p, _Vehicles[instance]);
+    else world = VehShadowWorld(p, _Vehicles[instance]);
+    _Out[i] = float4(world, present);
+}

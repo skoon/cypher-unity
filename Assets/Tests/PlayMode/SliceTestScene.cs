@@ -14,11 +14,16 @@ namespace Cypher.Tests
     {
         public const string ScenePath = "Assets/Scenes/Slice.unity";
 
-        /// <summary>Call from SetUp. Settings live in memory; <paramref name="storage"/> lets a test preload or inspect them.</summary>
-        public static void Isolate(ISettingsStorage storage = null, FlowOptions options = null)
+        /// <summary>
+        /// Call from SetUp. Settings live in memory; <paramref name="storage"/> lets a test preload or inspect them. The sound is off unless <paramref name="audio"/> is set, so the many tests that
+        /// have nothing to do with it neither pay for it nor depend on a sound device.
+        /// </summary>
+        public static void Isolate(ISettingsStorage storage = null, FlowOptions options = null, bool audio = false)
         {
             SettingsService.StorageFactory = () => storage ?? new MemorySettingsStorage();
-            LaunchOptions.Override = options ?? new FlowOptions();
+            FlowOptions o = options ?? new FlowOptions();
+            if (!audio && !o.NoAudio) o = new FlowOptions(o.SkipTitle, o.IgnoreUserSettings, o.NoAutoPause, o.NoCrowd, o.NoTraffic, o.NoVehicleLights, noAudio: true);
+            LaunchOptions.Override = o;
         }
 
         /// <summary>Call from TearDown.</summary>
@@ -29,6 +34,23 @@ namespace Cypher.Tests
             Time.timeScale = 1f;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+        }
+
+        static int _emptyScenes;
+
+        /// <summary>
+        /// For a [UnityTearDown]: unload the city a test loaded and leave an empty scene, so the next fixture builds its own in a clear one (the real city's props, colliders and controllers would be in its way).
+        /// </summary>
+        public static IEnumerator Unload()
+        {
+            Scene slice = SceneManager.GetSceneByPath(ScenePath);
+            if (slice.IsValid() && slice.isLoaded)
+            {
+                Scene empty = SceneManager.CreateScene("AfterASliceTest" + ++_emptyScenes);
+                SceneManager.SetActiveScene(empty);
+                yield return SceneManager.UnloadSceneAsync(slice);
+            }
+            Restore();
         }
 
         public static IEnumerator Load()

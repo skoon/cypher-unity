@@ -110,6 +110,96 @@ Plan: `implementation_plan_m2.md` (approved 2026-10-20). Milestone 2 is complete
       Not run: `tools/player-keys.ps1` (it needs the PC free; nothing in step 8 touches input). Not ported: the pooled real lights and the camera-facing glow cards on small
       signs (light spill is the glow pools).
 
+Milestone 3: living streets (steps 9 to 13 of `implementation_plan_m2.md`; Gate B at the end).
+
+- [x] 9. Navigation (2026-10-22). Port of `CityNav.js` as `Core/Nav/CityNav.cs` (`Crossing`, `NavBlock`, `NavGeometry`, `CityNav`): a ring of eight nodes round every block (four
+      corners and four kerb-edge midpoints, in cyclic order) with a crosswalk edge between the facing midpoints of neighbouring blocks (`Crossing.X` where the pedestrian walks
+      along Z over a road carrying X traffic, `Crossing.Z` the other way), the road centrelines `XLines` and `ZLines` (the intersection lattice), `KerbDistance`, `GroundY` and
+      `NodeInBand`. Decided without asking: the prototype probed the kerb with physics raycasts to learn where the pavement ends; the Core knows the geometry, so it is given
+      (`NavGeometry.City`: 62 m cells, 46 m blocks, pavement out to 25.5 m, kerb 0.185 m) and navigation stays pure, with no engine, no physics and no load-time cost. The
+      prototype's probe steps by 0.3 m and so reads the kerb as 25.4 m; the golden test feeds the generic build that same figure and gets the prototype's numbers exactly.
+      `KerbDistance` is found one axis at a time (the blocks are a full grid, which the build checks and refuses otherwise) instead of scanning all 49 blocks.
+      The ring radius is 24.25 m, the walkable band 0.8 m either side, the asphalt 5.5 m either side of a road centreline.
+      Verified: `tools/gen-golden.mjs` now also runs the prototype's `buildNav` on the golden city (with a flat world standing in for the physics probe) and writes
+      `nav_golden_20771.txt`; 28 new tests (23 property tests plus 5 golden checks of all 392 nodes, their neighbours and crossings, the centrelines, ground and kerb distance at
+      ten points and the band search from the same draws), 970 in the fast loop. Nothing in the Unity layer yet: step 10 will hang a `CityNav` on the builder when pedestrians need it.
+- [x] 10. Pedestrians (2026-10-22). Plan: `implementation_plan_step10.md`. You chose: cheaper bodies by distance on every tier, no people behind the title screen (the crowd is made round the player
+      when a game starts and removed at the title), the prototype's counts (36 / 60 / 110 / 320 / 400 on Performance to Ultra; Gate B will trim them).
+      Core, new folder `Crowd/`: `Pedestrian` + `PedestrianFactory` (the appearance table drawn in the prototype's random order), `CrowdSim` (the prototype's whole crowd logic: walk, hurry and idle states, target choice
+      along the kerb-node graph, the 4.2 m neighbour grid with ahead-only avoidance, player avoidance and a 0.62 m keep-out, the 112 to 144 m spawn band and 148 m recycle radius, pool resizing that never pops anyone into or out of
+      view, the eight people nearest the player), `ITrafficQuery` (the seam for step 11; nobody waits at a kerb yet), `Mat4` + `PedestrianPose` (the rig's joint maths, the reference the shader is checked against),
+      `PedestrianRig` (every part in its joint's frame: 706 triangles and 917 vertices for the full body with all accessories, 56 for the rigid body, 12 for the box, the contact-shadow disc), `PedestrianGpuData` (80 bytes),
+      `Frustum` and `CrowdFrame` (cull, interpolate, level of detail with 6 m hysteresis, sort into three runs, the head's glance at the camera), `CrowdVantage` (capture shots). `QualityTier` gained `Pedestrians`,
+      `ActorNear` and `ActorFar`; `--no-crowd` leaves the streets empty (a control for measuring).
+      Unity, new assembly `Cypher.Actors`: `Cypher/Pedestrian` shader (a vertex shader that poses every vertex from its part id and the person's gait, read from a structured buffer; URP PBR with the city's night fills,
+      shared with CityLit through the new `CityNightFill.hlsl`; faceted normals from screen-space derivatives; glowing unlit trim), `PedestrianPose.hlsl` (the pose maths, shared with a compute probe), `Cypher/PedestrianBlob`
+      (the soft shadow under each person), `CrowdRenderer` (one instanced draw per level of detail plus one for the shadows through `Graphics.RenderMeshPrimitives`: three or four draw calls for the crowd), `CrowdProxies`
+      (eight kinematic capsules leased to the nearest people), `CrowdController` (starts and stops with the game flow, steps at 60 Hz with interpolation, follows the tier). The capture tool photographs the nearest
+      person and one of each kind. A hand-rendered camera must call `CrowdController.DrawNow()` just before it renders, because the draws are queued per frame in LateUpdate.
+      **Checked against the prototype, not just against ourselves:** `tools/gen-golden-crowd.mjs` runs the prototype's real `Crowd.js` headless; the C# crowd matches its appearance table for all 400, and every
+      active person's position, heading and state after 0 to 5,400 steps (90 s) seeded, and after 0 to 900 steps standing at kerbs, with and without a stub traffic query that holds people back; the C# pose
+      matches all 555 joint matrices of 60 synthetic states to 5e-7; and the shader matches the C# pose on the GPU for 39,822 vertices (worst difference 0.00002 m).
+      **Finding, kept as the prototype has it:** people almost never choose to cross a road. A crosswalk is at right angles to the way someone is walking, so it scores at most 0.196 against at least 0.55 for carrying on
+      round the block, and only a spawn or recycle that happens to face the road starts one. Crowds therefore circle their own block. Worth a decision when traffic arrives (step 11).
+      Verified 2026-10-22 on the final code: `unity-check.ps1 -Step All` green (1,204 EditMode, 270 PlayMode), 1,102 in the fast loop (about 270 new). Cost (details in `performance_results.md`): on a quiet machine the
+      crowd costs about 0.5 to 0.9 ms at Medium on the plaza loop and nothing measurable at the other tiers or on the whole-city tour (127 FPS with and without 110 people); three or four draw calls; launch to play unchanged
+      at about 7 s. Looked at: people walk with a proper stride, swing their arms, carry umbrellas, wear long coats, hoods and packs, glow where they have trim, and stand on soft shadows.
+      Not done: real traffic to yield to (step 11), footsteps (step 12), people on the title screen (your choice), `tools/player-keys.ps1` (needs the PC free).
+- [x] 11. Traffic, aircraft and people who cross the road (2026-10-23). Plan: `implementation_plan_step11.md`. You chose: a light crossing bias (about 1 in 10 arrivals at a kerb midpoint cross, weight 2.0), people wait for a
+      gap and cars stop only for someone already on the road. Also as before: no traffic behind the title screen (made round the player when a game starts), the prototype's budgets (18 / 30 / 52 / 74 / 96 vehicles and
+      5 / 12 / 20 / 28 / 36 aircraft on Performance to Ultra; Gate B will trim them).
+      Core, new folder `Traffic/`: `VehicleCatalog` (the four ground and two aerial types, palettes) and `FleetBudget`, `Vehicle`, `Aircraft`, `SignalClock`, `SignalLamps`, `TrafficSim` (the prototype's whole logic: lane-following
+      pursuit, car-following, braking to red and amber, turn choice, left turns giving way, the 120 to 215 m spawn band and 250 m recycle, resizing to a tier's budget without popping anything into view, aircraft in six altitude
+      bands, the four nearest vehicles for colliders), `TrafficRules`, `VehicleMeshes` (hulls extruded from profiles, wheels, the rider, wings, the glow rigs and cones, the shadow, the 256 signal heads and masts),
+      `VehiclePlacement` (the per-frame part transforms; the shader's reference), `TrafficFrame` and `VehicleGpuData` (cull, interpolate, sort by type, pick the vehicles for the point lights), `TrafficVantage` (capture shots).
+      In `Crowd/`: `CrowdRules` (`Prototype` and `City`), `IPedestrianQuery`, and `ITrafficQuery.RoadBusy` now takes the whole crossing and the walker's speed. `QualityTier` gained `GroundVehicles`, `AircraftCount` and
+      `VehicleLights`; `--no-traffic` and `--no-vehicle-lights` are measuring controls.
+      Unity, in `Cypher.Actors`: `Cypher/Vehicle` (URP PBR with the night fills; bodies, wheels, aircraft and the masts), `Cypher/VehicleGlow` (added light: lamps, under-glow, cones, thrust), `Cypher/VehicleShadow`,
+      `Cypher/Signal` (the lit lamp comes from one global), `VehiclePose.hlsl` (the placement maths, shared with the compute probe), `TrafficRenderer` (at most 12 draw calls), `TrafficController` (starts and stops with the
+      game flow, 60 Hz with interpolation, follows the tier, steps after the crowd), `TrafficProxies` (four solid boxes the size of the vehicles), `TrafficLights` (six pooled real point lights, two on Performance).
+      **People cross roads now.** `CrowdRules.City` weights a crosswalk 2.0 against the prototype's 0.45, which could never win; people also look before stepping off the pavement, never idle on the road, and wait for a gap
+      (`TrafficSim.RoadBusy` counts vehicles speeding up as hard as they can, ones about to turn onto the road, and ones waiting at a red that will turn green); vehicles stop 3 m short of anyone on the road, and of anyone
+      walking into their lane. **Checked against the prototype, not just against ourselves:** `tools/gen-golden-traffic.mjs` runs the prototype's real `Traffic.js` headless; the C# traffic matches its fleet table (type, speed,
+      paint and under-glow for all 96, the aircraft), and every vehicle's and aircraft's position, speed, junction, turn and signal phase after 0 to 3,600 steps (60 s; 2,700 for the full fleet, see below), including with
+      the player standing in a lane; `tools/gen-golden-vehicles.mjs` checks every mesh's triangles and the matrix of every part of every vehicle and aircraft to 1e-5; and the shader places 14,000 vertices where the C#
+      reference does (worst difference logged by the PlayMode test).
+      **Faults in the prototype's traffic, kept as it has them under `TrafficRules.Prototype` and mended in the game's `TrafficRules.City`:** a vehicle waiting at a signal swings round to face a waypoint a few centimetres
+      away; a vehicle that overshoots a waypoint then skips through the junctions of half the grid and drives across the blocks (4 of 96 in 3 minutes, in the prototype itself); and the player in the road is only stopped for
+      from 14 m, too late for anything over about 13 m/s. One more oddity, left alone: a vehicle waiting to turn across traffic does not wait at the line, it coasts 2.5 m into the junction and goes (so the golden check
+      of the full fleet stops at 45 s, where such a vehicle steers for a point exactly behind it and the direction of its turn depends on the last bit of atan2).
+      **How safe:** ten simulated minutes at Medium and the top tier's full crowd and fleet: nobody ever inside a vehicle at Medium (closest 0.7 m), and nothing moving over 2 m/s ever runs into anyone at any tier; the
+      crowd does not steer round vehicles (neither does the prototype's), so in a crush someone is now and then pushed against a stopped or creeping one.
+      Verified 2026-10-23 on the final code: `unity-check.ps1 -Step All` green (1,421 EditMode, 289 PlayMode), 1,286 in the fast loop (about 190 new). Cost (details in `performance_results.md`): about 0.3 to 1 ms of GPU
+      and 3 to 10% of the frame rate at every tier, twelve draw calls at most; launch to play unchanged at about 7 s. Looked at: vehicles with wheels, lamps, under-glow, headlight cones on the wet road and soft shadows,
+      aircraft with thrust streaks and navigation lamps, signals changing at the junctions.
+      Not done: ambient audio (step 12), `tools/player-keys.ps1` (needs the PC free).
+- [x] 12. Ambient audio (2026-10-23; **built and checked, not yet listened to**). Plan: `implementation_plan_step12.md`. You chose: the bed synthesised live, plus the player's foley, sounds from the real traffic and
+      people, and the music score; nothing on the title screen but the menu sounds.
+      Core, new folder `Audio/` (with `Synth/` and `Recipes/`): a Web-Audio-shaped synthesis engine (`SynthGraph`, `AudioParam` automation, oscillators on band-limited wave tables, noise loops, biquads, gains, delays, a
+      panner, queued players, Chromium's dynamics compressor), `SoundBank` (38 recipes: 10 menu sounds, 6 ambient one-shots, footsteps on 7 surfaces, jump, land, cloth, breath, 11 music instruments), `Bed` + `AmbientEvents`
+      (seven continuous layers and six random-event clocks), `Score` (the prototype's generative synthwave) + `ScoreNotes` + `ScoreRender`, `SpaceProbe` + `ReverbSpaces` (alley, street, plaza, indoors, open),
+      `Footing`/`StrideClock`/`BreathClock`, `Occlusion`, `VoicePool`, `BusLevels`, `MasterStage` (glue + limiter + master, in code), `ClipPlan`, `ActorSounds`, `LiveGraphs`, `AudioAnalysis`, `AudioNoise`, `PointGrid`, `WavFile`,
+      `AudioExport`, `AudioCost`.
+      Unity, new assembly `Cypher.Audio`: `AudioEngine` (owns it all, follows the Options and the game flow), `AudioClipBank` (317 clips rendered on two worker threads at load), `SynthSource` (a graph on the audio thread through
+      `OnAudioFilterRead`), `BedPlayer` (bed, neon buzz and air conditioning standing at the nearest real tube and vent), `ScorePlayer`, `ActorVoices` (engine and tyres of the five nearest cars, footsteps of the nearest walkers),
+      `PlayerFoley`, `OneShotVoices` (24 placed and 16 flat voices, priority stealing, occlusion low-pass, Web Audio's rolloff as a curve), `AudioEnvironment`, `MasterFilter`, `MixerLevels`; `Cypher.mixer` (written as text by
+      `AudioMixerWriter`: seven groups per bus by reverb-send tier, a reverb return with exposed settings); `UiSound` raised from every menu interaction. `--no-audio` (`-NoAudio`) switches it all off.
+      **Checked against the prototype in a real Web Audio engine, not just against ourselves:** `tools/audio-ref/` runs the prototype's own `Bank.js`, `Ambience.js`, `Music.js` and `Dsp.js` in headless Chromium
+      (Playwright, from the prototype's node_modules, read-only) and writes the fixtures: the noises match sample for sample, the synthesis engine matches Chromium's oscillators, filters, delays and compressor, every
+      recipe matches its Chromium render, the bed matches at several weather settings and the score plays the same notes at the same times. Chromium details the port had to reproduce are listed in the memory file.
+      **Found along the way:** Unity's mixer compressor is a hard limiter, nothing like the prototype's 3:1 glue stage, so the master dynamics are code on the listener; a mixer group has one send level and the prototype gives every
+      sound its own, hence seven groups per bus; a mixer that may suspend idle groups swallows the first 20 ms of a click, so suspend is off; the asset keeps whatever the last test set through it (tests clear it first); and
+      `float * int` is evaluated wider by Unity's runtime than by .NET, which moved a 480-frame delay by a hair (now pinned with a cast).
+      **Decided without asking:** the prototype's convolution reverb has no equal in Unity, so the five spaces are five settings of Unity's SFX Reverb, blended over 1.3 s; 24 + 16 voices where the prototype had 80;
+      the prototype's random car passes and voices remain only as the fallback when there is no traffic or crowd.
+      Verified 2026-10-23 on the final code: 1,475 in the fast loop (about 190 new), 1,616 EditMode, 326 PlayMode (about 40 new, which wait out real time, so the test step now allows 30 minutes). Cost, details in
+      `performance_results.md`: **the audio thread takes about 27% of one core (5.7 ms of every 21.3 ms block), the main thread 0.17 ms a frame, 27 MB of clips, up to half a second more to load; the frame rate is 1 to 10% lower** with sound
+      (the tour at Medium: 100 FPS against 110). Tools: `Cypher > Export Audio Samples` writes every sound, three beds and two scores as WAV files at the level the game mixes them, with a `levels.md` (the quietest menu sound
+      is 6 dB over the rain bed ducked for the pause menu, 10 dB under it at full level); `Cypher > Profile Audio` times each kind of node; `unity-check.ps1 -Step Player -Release` builds without the Development flag.
+      Not done: **nobody has listened** (I cannot), so the levels, the reverb's size and the balance of the score are as the prototype's numbers give them and untuned by ear; IL2CPP; crackle detection (nothing counts a missed
+      audio block); `tools/player-keys.ps1` (needs the PC free).
+- [ ] 13. Integration and **Gate B**: the benchmark pilot through the populated city, per-tier runs, results in `performance_results.md`.
+
 ---
 
 # Milestone 1 — task checklist (complete)

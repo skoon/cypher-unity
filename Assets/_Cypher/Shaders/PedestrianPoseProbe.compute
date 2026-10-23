@@ -1,0 +1,27 @@
+// Runs the pedestrian shader's pose maths (PedestrianPose.hlsl) over a list of vertices and people and writes where each lands, so a PlayMode test can compare the GPU with
+// the C# reference (Cypher.Core.PedestrianPose) vertex for vertex. Not used by the game.
+#pragma kernel Pose
+
+#include "PedestrianPose.hlsl"
+
+StructuredBuffer<PedInstance> _Peds;
+StructuredBuffer<float4> _Vertices;   // xyz: position in the part's joint frame; w: the part id
+RWStructuredBuffer<float4> _Out;      // xyz: world position; w: 1 if the person wears the part, else 0
+float _Time;
+uint _VertexCount;
+uint _PedCount;
+
+[numthreads(64, 1, 1)]
+void Pose(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _VertexCount * _PedCount) return;
+    uint ped = i / _VertexCount;
+    uint vertex = i % _VertexCount;
+
+    PedInstance p = _Peds[ped];
+    uint part = (uint)(_Vertices[vertex].w + 0.5);
+    bool worn = PedWorn(part, p.extra.y);
+    float3 world = PedPoseVertex(part, _Vertices[vertex].xyz, p, _Time);
+    _Out[i] = float4(world, worn ? 1.0 : 0.0);
+}

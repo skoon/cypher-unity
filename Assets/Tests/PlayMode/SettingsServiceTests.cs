@@ -165,7 +165,7 @@ namespace Cypher.Tests
         public IEnumerator ABenchmarkLaunchUsesDefaultsAndNeverTouchesTheRealFile()
         {
             SettingsService.StorageFactory = null;   // fall through to the real choice of storage
-            LaunchOptions.Override = new FlowOptions(skipTitle: true, ignoreUserSettings: true, noAutoPause: true);
+            LaunchOptions.Override = new FlowOptions(skipTitle: true, ignoreUserSettings: true, noAutoPause: true, noAudio: true);
             string path = SettingsService.DefaultPath();
             bool existed = File.Exists(path);
             System.DateTime stamp = existed ? File.GetLastWriteTimeUtc(path) : default;

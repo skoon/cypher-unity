@@ -194,10 +194,17 @@ namespace Cypher.UI
             CancelCapture();
             _stack.SetFlowState(t.To);
             if (t.To == FlowState.Paused) _pause.Remembered = null;
+            // the pause menu opens and closes with a sound; the title, appearing at the start, does not
+            if (t.To == FlowState.Paused) UiSound.Raise(UiSound.Open);
+            else if (t.From == FlowState.Paused && t.To == FlowState.Playing) UiSound.Raise(UiSound.Close);
             Refresh();
         }
 
-        void OnNotice(string text) => _notices.Add(text, Time.unscaledTimeAsDouble);
+        void OnNotice(string text)
+        {
+            _notices.Add(text, Time.unscaledTimeAsDouble);
+            UiSound.Raise(UiSound.Notify);
+        }
 
         /// <summary>Show a message in the corner for a few seconds.</summary>
         public void ShowNotice(string text) => OnNotice(text);
@@ -282,6 +289,7 @@ namespace Cypher.UI
         {
             RememberFocus();
             if (!_stack.TryPush(UiScreen.Options)) return;
+            UiSound.Raise(UiSound.Open);
             _options.Open();
             Refresh();
         }
@@ -290,6 +298,7 @@ namespace Cypher.UI
         {
             RememberFocus();
             if (!_stack.TryPush(UiScreen.ConfirmQuit)) return;
+            UiSound.Raise(UiSound.Alert);
             _dialog.Configure("QUIT CYPHER?", "Leave the game and go back to the desktop.",
                 new[] { new DialogChoice("YES, QUIT", () => flow.Quit(), danger: true), new DialogChoice("NO", () => CloseTop()) }, defaultIndex: 1);
             Refresh();
@@ -299,6 +308,7 @@ namespace Cypher.UI
         {
             RememberFocus();
             if (!_stack.TryPush(UiScreen.ConfirmTitle)) return;
+            UiSound.Raise(UiSound.Alert);
             _dialog.Configure("RETURN TO TITLE?", "You will leave the game you are in.",
                 new[] { new DialogChoice("YES, LEAVE", () => flow.ReturnToTitle(), danger: true), new DialogChoice("NO", () => CloseTop()) }, defaultIndex: 1);
             Refresh();
@@ -310,6 +320,7 @@ namespace Cypher.UI
             if (_stack.Top == UiScreen.Options) _options.Flush();
             if (_stack.Pop())
             {
+                UiSound.Raise(UiSound.Close);
                 if (_stack.Top == UiScreen.Options) _options.RefreshControls();
                 Refresh();
             }
@@ -337,6 +348,7 @@ namespace Cypher.UI
             switch (_stack.Back())
             {
                 case BackResult.ClosedOverlay:
+                    UiSound.Raise(UiSound.Back);
                     if (_stack.Top == UiScreen.Options) _options.RefreshControls();
                     Refresh();
                     break;
@@ -359,6 +371,7 @@ namespace Cypher.UI
         {
             RememberFocus();
             if (!_stack.TryPush(UiScreen.Rebind)) return;
+            UiSound.Raise(UiSound.Open);
             _rebindAction = action;
             _rebindSlot = slot;
 
@@ -409,6 +422,7 @@ namespace Cypher.UI
             GameAction action = _rebindAction;
             BindingSlot slot = _rebindSlot;
             if (!_stack.TryReplaceTop(UiScreen.Conflict)) return;
+            UiSound.Raise(UiSound.Error);
             _dialog.Configure("ALREADY IN USE", conflict.Message + " Swap them?",
                 new[]
                 {

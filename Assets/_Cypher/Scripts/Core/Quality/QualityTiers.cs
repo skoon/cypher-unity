@@ -41,9 +41,32 @@ namespace Cypher.Core
         /// <summary>Whether puffs of steam drift off the stalls and vents.</summary>
         public bool Steam { get; }
 
+        /// <summary>How many people walk the streets (the prototype's budgets).</summary>
+        public int Pedestrians { get; }
+
+        /// <summary>People nearer than this are drawn as the full articulated rig; beyond <see cref="ActorFar"/> as a single box; between, a simple rigid body.</summary>
+        public double ActorNear { get; }
+
+        public double ActorFar { get; }
+
+        /// <summary>How many vehicles drive the roads.</summary>
+        public int GroundVehicles { get; }
+
+        /// <summary>How many aircraft cross the sky.</summary>
+        public int AircraftCount { get; }
+
+        /// <summary>How many cars carry a real point light, so the wet road reacts to them.</summary>
+        public int VehicleLights { get; }
+
         public QualityTier(QualityPreset preset, int internalHeight, int msaaSamples, BloomQuality bloom, int rainParticleCap, int probeResolution,
-            double propDistance = 125, bool steam = true)
+            double propDistance = 125, bool steam = true, int pedestrians = 110, double actorNear = 42, double actorFar = 92,
+            int groundVehicles = 52, int aircraftCount = 20, int vehicleLights = 6)
         {
+            if (pedestrians < 0 || pedestrians > QualityTiers.MaxPedestrians) throw new ArgumentOutOfRangeException(nameof(pedestrians), pedestrians, $"the crowd is 0 to {QualityTiers.MaxPedestrians}");
+            if (groundVehicles < 0 || groundVehicles > QualityTiers.MaxGroundVehicles) throw new ArgumentOutOfRangeException(nameof(groundVehicles), groundVehicles, $"the road holds 0 to {QualityTiers.MaxGroundVehicles} vehicles");
+            if (aircraftCount < 0 || aircraftCount > QualityTiers.MaxAircraft) throw new ArgumentOutOfRangeException(nameof(aircraftCount), aircraftCount, $"the sky holds 0 to {QualityTiers.MaxAircraft} aircraft");
+            if (vehicleLights < 0 || vehicleLights > QualityTiers.MaxVehicleLights) throw new ArgumentOutOfRangeException(nameof(vehicleLights), vehicleLights, $"0 to {QualityTiers.MaxVehicleLights} vehicles carry a light");
+            if (!(actorNear >= 10) || !(actorFar > actorNear) || double.IsInfinity(actorFar)) throw new ArgumentOutOfRangeException(nameof(actorFar), actorFar, "the detail distances must run from at least 10 m, near below far");
             if (!(propDistance >= 40) || double.IsInfinity(propDistance)) throw new ArgumentOutOfRangeException(nameof(propDistance), propDistance, "the prop distance must be at least 40 m");
             if (internalHeight < SettingsRanges.InternalHeightMin || internalHeight > SettingsRanges.InternalHeightMax) throw new ArgumentOutOfRangeException(nameof(internalHeight), internalHeight, "outside the allowed internal heights");
             if (msaaSamples != 1 && msaaSamples != 2 && msaaSamples != 4) throw new ArgumentOutOfRangeException(nameof(msaaSamples), msaaSamples, "MSAA must be 1, 2 or 4");
@@ -57,23 +80,36 @@ namespace Cypher.Core
             ProbeResolution = probeResolution;
             PropDistance = propDistance;
             Steam = steam;
+            Pedestrians = pedestrians;
+            ActorNear = actorNear;
+            ActorFar = actorFar;
+            GroundVehicles = groundVehicles;
+            AircraftCount = aircraftCount;
+            VehicleLights = vehicleLights;
         }
     }
 
     /// <summary>
     /// The five presets, cheapest first. The chunky 540p look is kept from Medium up; the dearer tiers spend their
     /// budget on anti-aliasing, bloom quality, reflection detail and rain density instead of resolution, and on how far out the
-    /// street props are drawn. Populations join the table when the city's people exist.
+    /// street props are drawn, and on how many people walk the streets and how far out they are drawn in full (the prototype's budgets, to be trimmed by the
+    /// measurements at Gate B), and on how many vehicles and aircraft move through the city and how many of those carry a light.
     /// </summary>
     public static class QualityTiers
     {
+        /// <summary>The most people any tier has: the size of the crowd's pool, which is built once for the top tier.</summary>
+        public const int MaxPedestrians = 400;
+
+        /// <summary>The most vehicles, aircraft and vehicle lights any tier has: the sizes of the traffic's fleet, built once for the top tier.</summary>
+        public const int MaxGroundVehicles = 96, MaxAircraft = 36, MaxVehicleLights = 6;
+
         static readonly QualityTier[] Table =
         {
-            new QualityTier(QualityPreset.Performance, 360, 1, BloomQuality.Fast, 1000, 64, propDistance: 70, steam: false),
-            new QualityTier(QualityPreset.Low, 450, 1, BloomQuality.Standard, 2000, 128, propDistance: 95),
-            new QualityTier(QualityPreset.Medium, 540, 1, BloomQuality.Standard, 3000, 128, propDistance: 125),
-            new QualityTier(QualityPreset.High, 540, 2, BloomQuality.High, 3000, 256, propDistance: 160),
-            new QualityTier(QualityPreset.Ultra, 540, 4, BloomQuality.High, 4500, 256, propDistance: 210),
+            new QualityTier(QualityPreset.Performance, 360, 1, BloomQuality.Fast, 1000, 64, propDistance: 70, steam: false, pedestrians: 36, actorNear: 25, actorFar: 55, groundVehicles: 18, aircraftCount: 5, vehicleLights: 2),
+            new QualityTier(QualityPreset.Low, 450, 1, BloomQuality.Standard, 2000, 128, propDistance: 95, pedestrians: 60, groundVehicles: 30, aircraftCount: 12),
+            new QualityTier(QualityPreset.Medium, 540, 1, BloomQuality.Standard, 3000, 128, propDistance: 125, pedestrians: 110, groundVehicles: 52, aircraftCount: 20),
+            new QualityTier(QualityPreset.High, 540, 2, BloomQuality.High, 3000, 256, propDistance: 160, pedestrians: 320, groundVehicles: 74, aircraftCount: 28),
+            new QualityTier(QualityPreset.Ultra, 540, 4, BloomQuality.High, 4500, 256, propDistance: 210, pedestrians: 400, groundVehicles: 96, aircraftCount: 36),
         };
 
         public static IReadOnlyList<QualityTier> All => Table;

@@ -52,18 +52,36 @@ namespace Cypher.UI
             RegisterCallback<PointerDownEvent>(_ => Focus());
             RegisterCallback<NavigationSubmitEvent>(e =>
             {
-                OnActivate();
+                Trigger();
                 e.StopPropagation();
             });
-            RegisterCallback<ClickEvent>(_ => OnActivate());
+            RegisterCallback<ClickEvent>(_ => Trigger());
+            // pointing at it, or arrowing onto it, is heard; focus placed by the screen itself is not
+            RegisterCallback<PointerEnterEvent>(_ =>
+            {
+                if (enabledInHierarchy) UiSound.Raise(UiSound.Hover);
+            });
+            RegisterCallback<FocusInEvent>(e =>
+            {
+                if (e.direction != FocusChangeDirection.unspecified && e.direction != FocusChangeDirection.none && enabledInHierarchy) UiSound.Raise(UiSound.Hover);
+            });
         }
+
+        /// <summary>The sound a press makes; null for a control that makes its own (a slider ticks as it moves).</summary>
+        public string ActivateSound { get; set; } = UiSound.Select;
 
         protected virtual void OnActivate()
         {
         }
 
+        void Trigger()
+        {
+            if (ActivateSound != null && enabledInHierarchy) UiSound.Raise(ActivateSound);
+            OnActivate();
+        }
+
         /// <summary>Do what a click or the Submit action does. Public for the screenshot mode and for tests.</summary>
-        public void Activate() => OnActivate();
+        public void Activate() => Trigger();
     }
 
     /// <summary>A menu entry: big text, an optional small note on the right, and an accent bar when focused or hovered.</summary>
@@ -114,6 +132,7 @@ namespace Cypher.UI
         protected SettingField(string title, string hint)
         {
             AddToClassList("cy-field");
+            ActivateSound = null;   // a field ticks when its value changes, not when it is pressed
             var label = Ui.Div("cy-field__label");
             label.Add(Ui.Display(title, "cy-field__title"));
             _hint = Ui.Text(hint ?? "", "cy-field__hint");
@@ -185,6 +204,7 @@ namespace Cypher.UI
         {
             if (_labels.Count == 0) return;
             SetIndex(OptionChoices.Cycle(_labels.Count, Index, direction));
+            UiSound.Raise(UiSound.Tick);
             Changed?.Invoke(Index);
         }
 
@@ -243,6 +263,7 @@ namespace Cypher.UI
             double next = _spec.Nudge(Value, direction);
             if (next == Value) return;
             SetValue(next);
+            UiSound.Raise(UiSound.Tick);
             Changed?.Invoke(Value);
         }
 
@@ -253,6 +274,7 @@ namespace Cypher.UI
             double next = _spec.FromFraction(x / width);
             if (next == Value) return;
             SetValue(next);
+            UiSound.Raise(UiSound.Tick);
             Changed?.Invoke(Value);
         }
     }
@@ -290,7 +312,11 @@ namespace Cypher.UI
             Value = value;
             _state.text = value ? "ON" : "OFF";
             EnableInClassList("cy-toggle--on", value);
-            if (notify) Changed?.Invoke(value);
+            if (notify)
+            {
+                UiSound.Raise(UiSound.Tick);
+                Changed?.Invoke(value);
+            }
         }
 
         protected override void OnActivate() => Set(!Value, notify: true);
@@ -399,7 +425,11 @@ namespace Cypher.UI
             List<IReadOnlyList<bool>> available = Available();
             if (!available[from.Row][from.Column]) return;
             GridPosition to = GridFocus.Move(available, from, direction.Value);
-            if (to.Row != from.Row || to.Column != from.Column) _rows[to.Row][to.Column].Focus();
+            if (to.Row != from.Row || to.Column != from.Column)
+            {
+                _rows[to.Row][to.Column].Focus();
+                UiSound.Raise(UiSound.Hover);
+            }
 
             e.PreventDefault();   // the grid owns arrow movement here, even at an edge, so focus never jumps out by itself
             e.StopPropagation();

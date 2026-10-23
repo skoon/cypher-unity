@@ -132,6 +132,53 @@ namespace Cypher.Capture
                 }
             }
 
+            // The people: close to the nearest and to one of each kind (umbrella, long coat, hood, pack and trim), then a view of a whole street of them.
+            var crowd = FindFirstObjectByType<Cypher.Actors.CrowdController>();
+            if (crowd != null && crowd.IsActive)
+            {
+                yield return new WaitForSecondsRealtime(1.5f);   // let the crowd walk about a little
+                Vector3 feet = FindFirstObjectByType<FirstPersonController>().transform.position;
+                foreach (Cypher.Core.PersonShot shot in Cypher.Core.CrowdVantage.Pick(crowd.Sim, feet.x, feet.z, range: 400))
+                {
+                    var from = new Vector3((float)shot.CamX, (float)shot.CamY, (float)shot.CamZ);
+                    var target = new Vector3((float)shot.TargetX, (float)shot.TargetY, (float)shot.TargetZ);
+                    cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(target - from));
+                    yield return null;
+                    yield return null;
+                    SubmitAndSave(cam, rt, Path.Combine(dir, shot.Name + ".png"));
+                }
+                Debug.Log($"[Cypher] crowd: {crowd.Sim.Active.Count} active, {crowd.Renderer.Frame.Total} drawn ({crowd.Renderer.Frame.Count(Cypher.Core.RigLod.Full)} full, {crowd.Renderer.Frame.Count(Cypher.Core.RigLod.Simple)} simple, {crowd.Renderer.Frame.Count(Cypher.Core.RigLod.Silhouette)} silhouettes), {crowd.Renderer.DrawCalls} draw calls");
+            }
+
+            // The traffic: close to the nearest vehicle of each kind, to an aircraft of each, and at a junction with its signals; the signals are looked at in both of their phases.
+            var traffic = FindFirstObjectByType<Cypher.Actors.TrafficController>();
+            if (traffic != null && traffic.IsActive)
+            {
+                Vector3 feet = FindFirstObjectByType<FirstPersonController>().transform.position;
+                foreach (Cypher.Core.TrafficShot shot in Cypher.Core.TrafficVantage.Pick(traffic.Sim, feet.x, feet.z, range: 400))
+                {
+                    var from = new Vector3((float)shot.CamX, (float)shot.CamY, (float)shot.CamZ);
+                    var target = new Vector3((float)shot.TargetX, (float)shot.TargetY, (float)shot.TargetZ);
+                    cam.transform.SetPositionAndRotation(from, Quaternion.LookRotation(target - from));
+                    yield return null;
+                    yield return null;
+                    SubmitAndSave(cam, rt, Path.Combine(dir, shot.Name + ".png"));
+                }
+
+                // the same junction when the other axis has green, wherever the cycle is now: wait for it to change
+                (int ix, int iz) = Cypher.Core.TrafficVantage.NearestJunction(traffic.Sim.Nav, feet.x, feet.z);
+                Cypher.Core.TrafficShot junction = Cypher.Core.TrafficVantage.Junction("junction_signals_other", traffic.Sim.Nav, ix, iz);
+                int axis = traffic.Sim.Signal.GreenAxis;
+                float change = Time.realtimeSinceStartup + 20f;
+                while (traffic.Sim.Signal.GreenAxis == axis && Time.realtimeSinceStartup < change) yield return null;
+                cam.transform.SetPositionAndRotation(new Vector3((float)junction.CamX, (float)junction.CamY, (float)junction.CamZ),
+                    Quaternion.LookRotation(new Vector3((float)junction.TargetX, (float)junction.TargetY, (float)junction.TargetZ) - new Vector3((float)junction.CamX, (float)junction.CamY, (float)junction.CamZ)));
+                yield return null;
+                yield return null;
+                SubmitAndSave(cam, rt, Path.Combine(dir, junction.Name + ".png"));
+                Debug.Log($"[Cypher] traffic: {traffic.Sim.Vehicles.Count} vehicles and {traffic.Sim.Airborne.Count} aircraft, {traffic.Renderer.Frame.GroundTotal} and {traffic.Renderer.Frame.AircraftTotal} drawn, {traffic.Renderer.DrawCalls} draw calls, {traffic.Lights.Lit} lights lit");
+            }
+
             // The steam: stand a few metres from where the first puff starts, looking at it, and take three pictures a second and a half
             // apart (a puff is invisible when it is born and when it dies, so one picture can miss it).
             if (city != null && city.Props != null && city.Props.Layout.Puffs.Count > 0)
@@ -165,6 +212,12 @@ namespace Cypher.Capture
 
         static void SubmitAndSave(Camera cam, RenderTexture rt, string path)
         {
+            // the people and the traffic are queued for the frame's cameras in LateUpdate; this camera renders by hand, in Update, so queue them again just before
+            var crowd = FindFirstObjectByType<Cypher.Actors.CrowdController>();
+            if (crowd != null && crowd.IsActive) crowd.DrawNow();
+            var traffic = FindFirstObjectByType<Cypher.Actors.TrafficController>();
+            if (traffic != null && traffic.IsActive) traffic.DrawNow();
+
             var request = new RenderPipeline.StandardRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(cam, request))
             {

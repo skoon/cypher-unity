@@ -3,7 +3,7 @@
 //
 //   node tools/gen-golden.mjs <path-to-cyberpunkish> [seed]
 //
-// Writes Assets/Tests/EditMode/Fixtures/{rng_golden.txt,city_golden_<seed>.txt}.
+// Writes Assets/Tests/EditMode/Fixtures/{rng_golden.txt,noise_golden.txt,city_golden_<seed>.txt,nav_golden_<seed>.txt}.
 import { pathToFileURL } from 'node:url';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -19,6 +19,7 @@ const load = (rel) => import(pathToFileURL(join(protoRoot, rel)).href);
 
 const { makeRng, perlin2, fbm2 } = await load('src/engine/Assets.js');
 const { City } = await load('src/world/City.js');
+const { buildNav } = await load('src/ai/CityNav.js');
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'Assets', 'Tests', 'EditMode', 'Fixtures');
 mkdirSync(outDir, { recursive: true });
@@ -81,4 +82,32 @@ city.volumes.forEach((v) => {
   lines.push(`V ${v.building} ${v.y0} ${v.y1} ${v.poly.length} ${v.poly.map((p) => `${p[0]} ${p[1]}`).join(' ')}`);
 });
 writeFileSync(join(outDir, `city_golden_${seed}.txt`), `${lines.join('\n')}\n`);
+// --- Navigation: the pedestrian graph and road lattice of the same city. The prototype probes the kerb with physics raycasts, so a flat
+// world stands in for it: the raised slab (y 0.185) within 25.5 m of a block centre (Chebyshev), asphalt beyond. The probe steps by 0.3 m from the
+// block edge, so it reports the outer kerb as 25.4 m, which is what the C# test feeds its generic build. ---
+const kerb = 25.5;
+const flatWorld = {
+  raycast(origin) {
+    let best = Infinity;
+    for (const s of city.streets) best = Math.min(best, Math.max(Math.abs(origin.x - s.cx), Math.abs(origin.z - s.cz)));
+    return { point: { y: best <= kerb ? 0.185 : 0 } };
+  },
+};
+const nav = buildNav({ cell: 62, blockSize: 46, streets: city.streets }, flatWorld);
+const navLines = [`# seed ${seed}`];
+navLines.push(`M ${nav.cell} ${nav.blockHalf} ${nav.walkOuter} ${nav.walkY} ${nav.roadY} ${nav.asphaltHalf} ${nav.ringR} ${nav.walkBand} ${nav.nodeCount}`);
+navLines.push(`X ${nav.xLines.join(' ')}`);
+navLines.push(`Z ${nav.zLines.join(' ')}`);
+for (let i = 0; i < nav.nodeCount; i++) {
+  navLines.push(`N ${i} ${nav.nx[i]} ${nav.nz[i]} ${nav.nBlock[i]} ${nav.adj[i].map((j, e) => `${j}:${nav.adjCross[i][e]}`).join(',')}`);
+}
+// ground height and kerb distance at a spread of points, and the band search with a fixed draw sequence
+const probes = [[0, 0], [25.4, 0], [25.6, 0], [31, 31], [-217, -217], [140.3, -77.7], [-12.5, 200.1], [300, 300], [-31, 10], [93, 93]];
+for (const [x, z] of probes) navLines.push(`G ${x} ${z} ${nav.kerbDistance(x, z)} ${nav.groundY(x, z)}`);
+const draws = makeRng(99);
+for (const [px, pz, lo, hi] of [[0, 0, 60, 120], [140, -80, 20, 70], [-200, 200, 0, 40], [5000, 5000, 0, 1]]) {
+  navLines.push(`B ${px} ${pz} ${lo} ${hi} ${nav.nodeInBand(draws, px, pz, lo, hi)}`);
+}
+writeFileSync(join(outDir, `nav_golden_${seed}.txt`), `${navLines.join('\n')}\n`);
+
 console.log(`wrote fixtures to ${outDir}: ${city.buildings.length} buildings, ${city.volumes.length} volumes`);

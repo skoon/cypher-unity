@@ -1,0 +1,22 @@
+{
+    "name": "Cypher.Audio",
+    "rootNamespace": "Cypher.Audio",
+    "references": [
+        "Cypher.Core",
+        "Cypher.City",
+        "Cypher.Game",
+        "Cypher.Player",
+        "Cypher.Rendering",
+        "Cypher.UI",
+        "Cypher.Actors"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

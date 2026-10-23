@@ -167,11 +167,11 @@ namespace Cypher.UI
             column.Add(Ui.Display("KABUKI // NIGHT SECTOR", "cy-subtitle"));
 
             var menu = Ui.Div("cy-menu");
-            NewGame = AddButton(menu, new MenuButton("NEW GAME"));
+            NewGame = AddButton(menu, new MenuButton("NEW GAME") { ActivateSound = UiSound.Confirm });
             Continue = AddButton(menu, new MenuButton("CONTINUE", "NO SAVE YET"));
             Continue.SetEnabled(false);
             Options = AddButton(menu, new MenuButton("OPTIONS"));
-            Quit = AddButton(menu, new MenuButton("QUIT", danger: true));
+            Quit = AddButton(menu, new MenuButton("QUIT", danger: true) { ActivateSound = UiSound.Alert });
             column.Add(menu);
             Root.Add(column);
 
@@ -204,10 +204,10 @@ namespace Cypher.UI
             var panel = Ui.Div("cy-panel", "cy-panel--pause");
             panel.Add(Ui.Display("PAUSED", "cy-heading"));
             panel.Add(Ui.Text("SIMULATION SUSPENDED", "cy-sub"));
-            Resume = AddButton(panel, new MenuButton("RESUME"));
+            Resume = AddButton(panel, new MenuButton("RESUME") { ActivateSound = UiSound.Confirm });
             Options = AddButton(panel, new MenuButton("OPTIONS"));
             ReturnToTitle = AddButton(panel, new MenuButton("RETURN TO TITLE"));
-            Quit = AddButton(panel, new MenuButton("QUIT", danger: true));
+            Quit = AddButton(panel, new MenuButton("QUIT", danger: true) { ActivateSound = UiSound.Alert });
             Root.Add(panel);
 
             Resume.Pressed += () => ResumeRequested?.Invoke();
@@ -270,7 +270,7 @@ namespace Cypher.UI
             _buttons.Clear();
             foreach (DialogChoice choice in choices)
             {
-                var button = new MenuButton(choice.Text, danger: choice.Danger, compact: true) { focusable = focusable };
+                var button = new MenuButton(choice.Text, danger: choice.Danger, compact: true) { focusable = focusable, ActivateSound = choice.Danger ? UiSound.Confirm : UiSound.Back };
                 Action chosen = choice.Chosen;
                 button.Pressed += () => chosen();
                 _buttons.Add(button);

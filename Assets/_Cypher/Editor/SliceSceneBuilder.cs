@@ -1,4 +1,5 @@
 using System.IO;
+using Cypher.Actors;
 using Cypher.City;
 using Cypher.Core;
 using Cypher.Game;
@@ -29,6 +30,12 @@ namespace Cypher.EditorTools
         public const string RainShaderName = "Cypher/Rain";
         public const string SteamShaderName = "Cypher/Steam";
         public const string BoardShaderName = "Cypher/NeonBoard";
+        public const string PedestrianShaderName = "Cypher/Pedestrian";
+        public const string PedestrianBlobShaderName = "Cypher/PedestrianBlob";
+        public const string VehicleShaderName = "Cypher/Vehicle";
+        public const string VehicleGlowShaderName = "Cypher/VehicleGlow";
+        public const string VehicleShadowShaderName = "Cypher/VehicleShadow";
+        public const string SignalShaderName = "Cypher/Signal";
 
         public const string SettingsFolder = "Assets/_Cypher/Settings";
         public const string VolumeProfilePath = SettingsFolder + "/NightVolume.asset";
@@ -101,11 +108,84 @@ namespace Cypher.EditorTools
             uiRoot.Configure(flow, settings);   // loading, title, pause, options, dialogs and the Esc key
             game.AddComponent<UiShots>().Configure(uiRoot, flow, settings);   // only does anything with --shots DIR
 
+            // The people: created round the player when a game starts, gone again at the title.
+            (Material peopleMaterial, Material peopleShadow) = EnsurePedestrianMaterials();
+            var crowdGo = new GameObject("Crowd");
+            var crowd = crowdGo.AddComponent<CrowdController>();
+            crowd.Configure(flow, cityBuilder, playerController, camera.GetComponent<Camera>(), quality.GetComponent<QualityDirector>(), peopleMaterial, peopleShadow);
+
+            // The traffic and the aircraft: likewise, and they and the people look out for each other.
+            var trafficGo = new GameObject("Traffic");
+            var traffic = trafficGo.AddComponent<TrafficController>();
+            traffic.Configure(flow, cityBuilder, playerController, camera.GetComponent<Camera>(), quality.GetComponent<QualityDirector>(), crowd, EnsureTrafficMaterials());
+
+            // The sound: the menu sounds from the first screen, the city's bed and the score from a new game, through the generated mixer.
+            AudioMixerWriter.Write();
+            var audioMixer = AssetDatabase.LoadAssetAtPath<UnityEngine.Audio.AudioMixer>(AudioMixerWriter.Path);
+            if (audioMixer == null) throw new FileNotFoundException($"The mixer {AudioMixerWriter.Path} did not import.");
+            var audioGo = new GameObject("Audio");
+            audioGo.AddComponent<Cypher.Audio.AudioEngine>().Configure(audioMixer, flow, settings, playerController, camera.transform, cityBuilder, crowd, traffic, rainController);
+
             EditorSceneManager.MarkSceneDirty(scene);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             Debug.Log($"[Cypher] Slice scene saved to {ScenePath}; camera '{camera.name}' at spawn.");
+        }
+
+        /// <summary>The pedestrians' body material and the contact-shadow material under them.</summary>
+        public static (Material body, Material shadow) EnsurePedestrianMaterials()
+        {
+            Directory.CreateDirectory(MaterialsFolder);
+            Shader body = Shader.Find(PedestrianShaderName);
+            if (body == null) throw new FileNotFoundException($"Shader {PedestrianShaderName} not found; has it been imported?");
+            Shader blob = Shader.Find(PedestrianBlobShaderName);
+            if (blob == null) throw new FileNotFoundException($"Shader {PedestrianBlobShaderName} not found; has it been imported?");
+            Material bodyMaterial = Ensure("CityPeople", body, _ => { });
+            Material shadowMaterial = Ensure("CityPeopleShadow", blob, m =>
+            {
+                m.SetFloat("_Opacity", 0.42f);
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            });
+            AssetDatabase.SaveAssets();
+            return (bodyMaterial, shadowMaterial);
+        }
+
+        /// <summary>The vehicles' paint and rubber, the signal masts, the glowing lamps, the shadow under each vehicle and the signal lenses.</summary>
+        public static TrafficMaterials EnsureTrafficMaterials()
+        {
+            Directory.CreateDirectory(MaterialsFolder);
+            Shader Find(string name)
+            {
+                Shader shader = Shader.Find(name);
+                if (shader == null) throw new FileNotFoundException($"Shader {name} not found; has it been imported?");
+                return shader;
+            }
+            Shader vehicle = Find(VehicleShaderName);
+            var materials = new TrafficMaterials
+            {
+                // the prototype's materials: paint roughness 0.30 metalness 0.62; rubber 0x0d0e12 roughness 0.88 metalness 0.05; masts 0x14161c roughness 0.72 metalness 0.35
+                Bodies = Ensure("CityVehicles", vehicle, m => { m.SetFloat("_Smoothness", 0.70f); m.SetFloat("_Metallic", 0.62f); m.SetFloat("_UsePaint", 1f); }),
+                Wheels = Ensure("CityVehicleWheels", vehicle, m =>
+                {
+                    m.SetFloat("_Smoothness", 0.12f); m.SetFloat("_Metallic", 0.05f); m.SetFloat("_UsePaint", 0f);
+                    m.SetColor("_FixedAlbedo", new Color32(0x0d, 0x0e, 0x12, 0xff));
+                }),
+                Masts = Ensure("CitySignalMasts", vehicle, m =>
+                {
+                    m.SetFloat("_Smoothness", 0.28f); m.SetFloat("_Metallic", 0.35f); m.SetFloat("_UsePaint", 0f);
+                    m.SetColor("_FixedAlbedo", new Color32(0x14, 0x16, 0x1c, 0xff));
+                }),
+                Glow = Ensure("CityVehicleGlow", Find(VehicleGlowShaderName), m => m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent),
+                Shadow = Ensure("CityVehicleShadow", Find(VehicleShadowShaderName), m =>
+                {
+                    m.SetFloat("_Opacity", 0.5f);
+                    m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                }),
+                Lenses = Ensure("CitySignalLenses", Find(SignalShaderName), _ => { }),
+            };
+            AssetDatabase.SaveAssets();
+            return materials;
         }
 
         public static Material EnsureRainMaterial()

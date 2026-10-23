@@ -5,6 +5,7 @@
         "Cypher.Core",
         "Cypher.City",
         "Cypher.Game",
+        "Cypher.Actors",
         "Cypher.Player",
         "Cypher.Rendering"
     ],
