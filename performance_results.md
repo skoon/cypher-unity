@@ -269,6 +269,60 @@ slow modulators computed once per 32 frames and interpolated (they are about a f
 What this does not say: IL2CPP, other hardware, and the populated route of Gate B (step 13), where the crowd, traffic and sound all run together. The audio cost does not grow with the crowd or traffic (it is five cars and the
 nearest walkers' footsteps whatever the population), so what step 13 adds is the other costs' sum.
 
+## Gate B, a partial measurement (Milestone 3, step 13, 2026-10-23)
+
+**Gate B: the default tier, fully populated, p99 at most 33.3 ms. Passed at Medium, with the other tiers only partly measured.** The step was closed on your word that this is acceptable for now; what is missing is listed
+under "What this does not say". The raw data is kept in `benchmarks/gate-b-2026-10-23/` and the tools to repeat it are in the repo (below).
+
+**How it was measured.** A new route, `--benchmark-route street`: a closed walk of 690 m on the pavements and over eight crosswalks of the eight blocks round the plaza, made of the same graph the people walk
+(`StreetRoutes`), a third of the pavement run and the rest walked, 158 s a lap for a walker with nothing in the way; the recording is 160 s, one lap, after a 10 s warm-up. Unlike the tours, which walk the road
+centrelines where cars stop for the pilot and then hold it up (the 100 s city tour covered 448 m, 687 m and 460 m in three runs), this pilot steps aside when it is held up and says so. The Development player (Mono),
+1080p borderless window, 540p internal, adaptive quality off, vsync off, **everything on** (the tier's own people, vehicles and aircraft, the signals and lights, the props, the signage, the rain and the sound), the machine
+quiet (CPU 7 and 8% before the runs). Medium and Ultra, **one run each**.
+
+| | Medium | Ultra |
+|---|---|---|
+| FPS avg / p50 / p95 / **p99** / worst ms | 88.9 / 11.1 / 13.6 / **15.6** / 23.3 | 73.3 / 13.6 / 16.2 / **17.9** / 296.1 |
+| Frames over 33.3 ms (of 14,226 and 11,724) | 0 | 2 (the 296 ms frame and the one after it) |
+| Headroom under the gate (p99) | 53% | 46% |
+| CPU / GPU ms avg, GPU p99 | 11.3 / 9.8, 13.3 | 13.7 / 12.2, 16.1 |
+| Draw calls avg / max, triangles avg | 302 / 498, 374 k | 316 / 530, 546 k |
+| People active, drawn avg / most (full rig avg) | 110, 27 / 54 (3) | 400, 101 / 204 (10) |
+| Vehicles active, drawn avg / most; aircraft drawn avg | 52, 14 / 27; 3 | 96, 24 / 44; 6 |
+| The pilot: metres, held up, detours | 673 m, 3.8 s, 2 | 662 m, 3.8 s, 2 |
+| The sound: audio thread of its 21.3 ms block, voices, main thread | 6.2 ms (29%), 3.4, 0.19 ms a frame | 6.3 ms (29%), 4.9, 0.24 ms a frame |
+| Main-thread allocation per frame; frames with a collection | 4.2 KB avg; 9 | 4.5 KB avg; 8 |
+| Launch to the first playing frame | 8.1 s | 8.2 s |
+
+By the rule you chose for the default tier (the highest with at least 20% headroom, three runs each), Ultra would be the answer on these numbers, with High unmeasured. **The default stays Medium** until the full
+set is run: one run of two tiers is not what the rule asks for.
+
+**Hitches.** `hitches.csv` lists the frames over budget and `warmup_hitches.csv` those over 50 ms in the warm-up.
+- **One 296 ms frame at Ultra, 67 s in** (at 148, 66), then a 40 ms one. The frame's CPU time was 12.7 ms and its GPU time normal: the stall was outside the game's own work, no collection ran, and 2 KB was allocated. It
+  happened once in two runs and has not been seen again; whether it recurs at that place is the thing to look for in repeats.
+- **Every garbage collection is small and none coincides with a hitch.** 4 KB a frame is garbage the game makes on the main thread, a collection every 18 to 20 s. The 1.28 MB "maximum" in both runs is the benchmark
+  runner's own scan for what to count, in the first recorded frame.
+- **About half a second of stutter after New Game** (the warm-up lists, and four short diagnostic runs in `startup-hitches-2026-10-23/`): a **225 ms first frame that is there with the people, the traffic and the sound all
+  switched off** (the game's own start); in the same frame the actors start (**the crowd 41 ms, the traffic 74 ms of which 51 are its meshes, the sound's world 73 ms**, in a Development player); and **a second stall of 280 to
+  310 ms about 0.3 s later when the crowd and the traffic are first drawn** (I think the graphics driver compiling their shaders, which I have not proved; with only the sound on the second frame is 230 ms, and with nothing on there is none). None of it is in the gate's p99, since it is
+  before the recording. Options if it matters: start the actors on successive frames (saves part of the first), or warm the shaders while loading (removes the second); neither is done.
+
+**What this does not say.**
+- **Performance, Low and High were not measured**, and nothing was repeated: no median of three, so the 296 ms frame could not be told from a one-off.
+- The Junction stress route (the busiest junction, cars queued for the pilot) was not run.
+- IL2CPP (skipped on your answer) and a release build with everything populated; other hardware; sessions longer than a lap.
+- The sound's levels have not been tuned by ear.
+
+**To repeat it** (the player must be rebuilt first after any change; `gate-b.ps1` refuses a stale one, waits for a quiet machine, alternates the tiers and prints the table and the highest tier with headroom; it takes over the
+screen, about 55 minutes for the full set):
+
+```
+powershell -File tools/unity-check.ps1 -Step Player
+powershell -File tools/gate-b.ps1                                       (Street route, five tiers, three runs each)
+powershell -File tools/gate-b.ps1 -Route junction -Repeats 1 -Seconds 90 (the stress case)
+powershell -File tools/gate-b.ps1 -ReportFrom <a results folder>        (print the table for runs already made)
+```
+
 ## Startup and the flow (Milestone 2, step 3, 2026-10-20)
 
 A normal launch of the Development player on this machine (1280x720 window): the engine is up and Boot ends at 4.4 s, loading

@@ -1,0 +1,63 @@
+unity: 6000.6.6f1
+build: Development, Mono
+gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+window: 1920x1080, Windowed
+internal_height: 540
+quality: Medium, adaptive off
+msaa: 1x
+unity_quality_level: PC
+vsync: 0
+city_build_ms: 1545
+launch_to_play_s: 8.40
+route: centre
+warmup_s: 4
+route_laps: 0
+route_waypoints_reached: 0
+frames: 345
+duration_s: 4.01
+avg_fps: 86.1
+avg_ms: 11.61
+p50_ms: 11.30
+p95_ms: 13.42
+p99_ms: 15.09
+worst_ms: 24.65
+budget_ms: 33.33
+frames_over_budget: 0
+cpu_avg_ms: 11.61
+gpu_avg_ms: 10.64
+gpu_p99_ms: 13.62
+draw_calls_avg: 248
+draw_calls_max: 250
+triangles_avg: 288905
+triangles_max: 288945
+distance_m: 16.4
+stalled_s: 0.0
+detours: 0
+alloc_kb_avg: 3.90
+alloc_kb_max: 42.1
+gc_frames: 1
+vehicles_active_avg: 0.00
+vehicles_active_max: 0.00
+vehicles_drawn_avg: 0.00
+vehicles_drawn_max: 0.00
+aircraft_drawn_avg: 0.00
+aircraft_drawn_max: 0.00
+vehicle_lights_lit_avg: 0.00
+vehicle_lights_lit_max: 0.00
+audio_thread_ms_avg: 5.51
+audio_thread_ms_max: 5.58
+audio_thread_share_avg: 0.26
+audio_thread_share_max: 0.26
+audio_main_ms_avg: 0.26
+audio_main_ms_max: 0.30
+audio_voices_avg: 2.59
+audio_voices_max: 4.00
+people_active_avg: 0.00
+people_active_max: 0.00
+people_drawn_avg: 0.00
+people_drawn_max: 0.00
+people_full_rig_avg: 0.00
+people_full_rig_max: 0.00
+floor_fps: 30
+result: PASS

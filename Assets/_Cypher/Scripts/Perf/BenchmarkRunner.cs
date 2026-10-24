@@ -5,6 +5,7 @@ using Cypher.City;
 using Cypher.Core;
 using Cypher.Player;
 using Cypher.Rendering;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Cypher.Perf
@@ -22,7 +23,12 @@ namespace Cypher.Perf
     public sealed class BenchmarkRunner : MonoBehaviour
     {
         public const string CsvFile = "benchmark.csv";
+        public const string HitchesFile = "hitches.csv";
+        public const string WarmupHitchesFile = "warmup_hitches.csv";
         public const string SummaryFile = "benchmark_summary.txt";
+
+        /// <summary>A frame in the warm-up longer than this is listed: first sight of a shader, the start of a game.</summary>
+        public const double WarmupHitchMs = 50;
         public const string FirstFrameShot = "first_frame.png";
         public const string LastFrameShot = "last_frame.png";
 
@@ -48,6 +54,13 @@ namespace Cypher.Perf
         BenchmarkRecorder _recorder;
         string _outputDirectory;
         FrameTiming[] _timings;
+
+        ProfilerRecorder _allocated;
+        int _collections;
+        IBenchmarkCounters[] _counterSources = Array.Empty<IBenchmarkCounters>();
+        double _stalledAtStart;
+        int _detoursAtStart;
+        readonly List<string> _warmupHitches = new List<string>();
 
         /// <summary>Frames to let pass after the last screenshot so it is written before the process exits.</summary>
         const int ExitDelayFrames = 3;
@@ -108,12 +121,34 @@ namespace Cypher.Perf
 
             _counters = new RenderCounters();
             _timings = new FrameTiming[1];
-            _pilot = new BenchmarkPilot(BenchmarkPilot.Route(_options.Route), _player.Sensitivity);
-            _player.CommandSource = new PilotCommandSource(_player, _pilot);
+            // "GC Allocated In Frame" exists in a Development player only; elsewhere the allocation reads as not available
+            _allocated = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
+            _collections = GC.CollectionCount(0);
             _recorder = new BenchmarkRecorder();
+            TryMakePilot();
 
             State = Phase.Warmup;
             Debug.Log($"[Cypher] benchmark: {_options.Route} route, {_options.WarmupSeconds:0.#} s warm-up, then {_options.DurationSeconds:0.#} s recorded, results in {_outputDirectory}");
+        }
+
+        /// <summary>
+        /// Hands the character to a pilot. The routes on the pavement are made from the city's pedestrian graph, which exists once the city is built: until then this says no, and is asked
+        /// again every frame.
+        /// </summary>
+        bool TryMakePilot()
+        {
+            if (_pilot != null) return true;
+            CityNav nav = null;
+            if (_options.Route == BenchmarkRoute.Street || _options.Route == BenchmarkRoute.Junction)
+            {
+                CityBuilder city = FindFirstObjectByType<CityBuilder>();
+                if (city == null) throw new InvalidOperationException($"The {_options.Route} route needs a CityBuilder in the scene.");
+                if (!city.IsBuilt) return false;
+                nav = CityNav.Build(city.Slice.Plan);
+            }
+            _pilot = new BenchmarkPilot(BenchmarkPilot.Route(_options.Route, nav), _player.Sensitivity);
+            _player.CommandSource = new PilotCommandSource(_player, _pilot);
+            return true;
         }
 
         /// <summary>A benchmark measures one preset: adaptive quality off, and the requested preset if one was given.</summary>
@@ -135,6 +170,7 @@ namespace Cypher.Perf
         {
             Application.logMessageReceived -= OnLog;
             _counters?.Dispose();
+            _allocated.Dispose();
             if (_settingsChanged)
             {
                 QualitySettings.vSyncCount = _savedVSync;
@@ -155,6 +191,7 @@ namespace Cypher.Perf
             double dt = Time.unscaledDeltaTime;
             if (dt <= 0) return;
             if (State == Phase.Warmup && !_player.isActiveAndEnabled) return;   // still loading: the flow has not started the game
+            if (!TryMakePilot()) return;
 
             if (_frame++ == 0)
             {
@@ -163,12 +200,21 @@ namespace Cypher.Perf
             }
 
             _phaseSeconds += dt;
-            if (State == Phase.Warmup) UpdateWarmup();
+            if (State == Phase.Warmup) UpdateWarmup(dt);
             else UpdateRecording(dt);
         }
 
-        void UpdateWarmup()
+        void UpdateWarmup(double dt)
         {
+            int collections = GC.CollectionCount(0);
+            if (dt * 1000.0 > WarmupHitchMs)
+            {
+                Vector3 at = _player.transform.position;
+                (double cpu, double gpu) = ReadFrameTimings();
+                _warmupHitches.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1:F3},{2:F3},{3:F3},{4:F2},{5:F2},{6}",
+                    _phaseSeconds, dt * 1000.0, cpu, gpu, at.x, at.z, collections != _collections ? 1 : 0));
+            }
+            _collections = collections;
             if (_phaseSeconds < _options.WarmupSeconds) return;
             if (_probe != null && !_probe.IsCaptured)
             {
@@ -180,13 +226,35 @@ namespace Cypher.Perf
             }
             State = Phase.Recording;
             _phaseSeconds = 0;
+            _stalledAtStart = _pilot.StalledSeconds;
+            _detoursAtStart = _pilot.Detours;
+            _collections = GC.CollectionCount(0);
+            _counterSources = FindCounterSources();
+        }
+
+        /// <summary>Whatever in the scene reports counters: the crowd, the traffic, the sound.</summary>
+        static IBenchmarkCounters[] FindCounterSources()
+        {
+            var found = new List<IBenchmarkCounters>();
+            foreach (MonoBehaviour b in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            {
+                if (b is IBenchmarkCounters c) found.Add(c);
+            }
+            return found.ToArray();
         }
 
         void UpdateRecording(double dt)
         {
             (double cpu, double gpu) = ReadFrameTimings();
             Vector3 p = _player.transform.position;
-            _recorder.Add(new FrameSample(_phaseSeconds, dt * 1000.0, cpu, gpu, _counters.DrawCalls, _counters.Triangles, p.x, p.z));
+            int collections = GC.CollectionCount(0);
+            long allocated = _allocated.Valid ? _allocated.LastValue : -1;
+            _recorder.Add(new FrameSample(_phaseSeconds, dt * 1000.0, cpu, gpu, _counters.DrawCalls, _counters.Triangles, p.x, p.z, allocated, collections != _collections));
+            _collections = collections;
+            foreach (IBenchmarkCounters source in _counterSources)
+            {
+                for (int i = 0; i < source.CounterCount; i++) _recorder.AddCounter(source.CounterName(i), source.Counter(i));
+            }
 
             if (_phaseSeconds >= _options.DurationSeconds) Finish();
         }
@@ -201,10 +269,12 @@ namespace Cypher.Perf
         void Finish()
         {
             State = Phase.Done;
-            Summary = _recorder.Summarise();
+            Summary = _recorder.Summarise(_pilot.StalledSeconds - _stalledAtStart, _pilot.Detours - _detoursAtStart);
             string text = Summary.ToText(DescribeEnvironment());
             File.WriteAllText(Path.Combine(_outputDirectory, SummaryFile), text);
             File.WriteAllText(Path.Combine(_outputDirectory, CsvFile), _recorder.ToCsv());
+            File.WriteAllText(Path.Combine(_outputDirectory, HitchesFile), _recorder.HitchesCsv());
+            File.WriteAllText(Path.Combine(_outputDirectory, WarmupHitchesFile), "time_s,frame_ms,cpu_ms,gpu_ms,x,z,gc\n" + string.Join("\n", _warmupHitches) + (_warmupHitches.Count > 0 ? "\n" : ""));
             Debug.Log("[Cypher] benchmark finished:\n" + text);
 
             int code = Summary.Verdict == BenchmarkVerdict.Pass ? ExitPass

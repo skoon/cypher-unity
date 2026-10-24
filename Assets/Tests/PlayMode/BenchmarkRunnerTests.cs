@@ -9,6 +9,14 @@ using UnityEngine.TestTools;
 
 namespace Cypher.Tests
 {
+    /// <summary>Something in the scene that reports two numbers a frame, as the crowd, the traffic and the sound do.</summary>
+    sealed class FakeCounters : MonoBehaviour, IBenchmarkCounters
+    {
+        public int CounterCount => 2;
+        public string CounterName(int index) => index == 0 ? "fake_things" : "fake_frames";
+        public double Counter(int index) => index == 0 ? 7 : Time.frameCount;
+    }
+
     public class BenchmarkRunnerTests
     {
         PlayerTestRig _rig;
@@ -94,6 +102,58 @@ namespace Cypher.Tests
             StringAssert.Contains("city_build_ms: ", summary);
             StringAssert.Contains("p99_ms: ", summary);
             StringAssert.Contains("result: " + runner.Summary.Verdict.ToString().ToUpperInvariant(), summary);
+        }
+
+        [UnityTest]
+        public IEnumerator WritesTheHitchListsReportsAllocationHeldUpTimeAndWhatTheSystemsCount()
+        {
+            _rig = new PlayerTestRig();
+            _rig.PlaceAndSettle(new Vector3(0f, (float)CityLayout.SidewalkHeight + 0.1f, 0f));
+            _rig.Player.AutoTick = true;
+            var counters = new GameObject("fake counters").AddComponent<FakeCounters>();
+            try
+            {
+                BenchmarkRunner runner = MakeRunner(new BenchmarkOptions(true, _dir, warmupSeconds: 0.3, durationSeconds: 3), _ => { });
+                float deadline = Time.realtimeSinceStartup + 60f;
+                while (runner.State != BenchmarkRunner.Phase.Done && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.AreEqual(BenchmarkRunner.Phase.Done, runner.State);
+
+                string summary = File.ReadAllText(Path.Combine(_dir, BenchmarkRunner.SummaryFile));
+                StringAssert.Contains("stalled_s: ", summary);
+                StringAssert.Contains("detours: ", summary);
+                StringAssert.Contains("alloc_kb_avg: ", summary);
+                StringAssert.Contains("gc_frames: ", summary);
+                StringAssert.Contains("fake_things_avg: 7.00", summary);
+                StringAssert.Contains("fake_frames_max: ", summary);
+                Assert.AreEqual(2, runner.Summary.Counters.Count);
+                Assert.AreEqual(7, runner.Summary.Counters[0].Average, 1e-9);
+
+                string hitches = File.ReadAllText(Path.Combine(_dir, BenchmarkRunner.HitchesFile));
+                Assert.AreEqual(BenchmarkRecorder.HitchesHeader, hitches.Split('\n')[0]);
+                string warmup = File.ReadAllText(Path.Combine(_dir, BenchmarkRunner.WarmupHitchesFile));
+                Assert.AreEqual("time_s,frame_ms,cpu_ms,gpu_ms,x,z,gc", warmup.Split('\n')[0]);
+            }
+            finally
+            {
+                Object.DestroyImmediate(counters.gameObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TheStreetRouteIsMadeFromTheCityAndWalkedOnItsPavements()
+        {
+            _rig = new PlayerTestRig();
+            _rig.PlaceAndSettle(new Vector3(0f, (float)CityLayout.SidewalkHeight + 0.1f, 0f));
+            _rig.Player.AutoTick = true;
+            BenchmarkRunner runner = MakeRunner(new BenchmarkOptions(true, _dir, warmupSeconds: 0.3, durationSeconds: 9, route: BenchmarkRoute.Street), _ => { });
+            float deadline = Time.realtimeSinceStartup + 90f;
+            while (runner.State != BenchmarkRunner.Phase.Done && Time.realtimeSinceStartup < deadline) yield return null;
+
+            Assert.AreEqual(BenchmarkRunner.Phase.Done, runner.State);
+            Assert.AreNotEqual(BenchmarkVerdict.Invalid, runner.Summary.Verdict, "the pilot got along the pavements");
+            Assert.Greater(runner.Summary.DistanceMetres, 20.0);
+            Assert.Less(runner.Summary.StalledSeconds, 0.15 * runner.Summary.DurationSeconds);
+            StringAssert.Contains("route: street", File.ReadAllText(Path.Combine(_dir, BenchmarkRunner.SummaryFile)));
         }
 
         [UnityTest]

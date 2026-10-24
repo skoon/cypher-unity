@@ -1,6 +1,6 @@
 # Milestone 2 — task checklist
 
-Plan: `implementation_plan_m2.md` (approved 2026-10-20). Milestone 2 is complete: Gate A passed 2026-10-22. Milestone 3 (steps 9-13) is next.
+Plan: `implementation_plan_m2.md` (approved 2026-10-20). Milestone 2 is complete: Gate A passed 2026-10-22. Milestone 3 (steps 9-13) is complete: Gate B passed 2026-10-23 at Medium (a partial measurement, see step 13).
 
 - [x] 1. Settings core (2026-10-20): `GameSettings` (graphics, audio, gameplay, controls overrides) with validated ranges,
       dependency-free `Json`, `SettingsSerializer` (strict about wrong values, tolerant of missing/unknown keys),
@@ -198,8 +198,24 @@ Milestone 3: living streets (steps 9 to 13 of `implementation_plan_m2.md`; Gate 
       is 6 dB over the rain bed ducked for the pause menu, 10 dB under it at full level); `Cypher > Profile Audio` times each kind of node; `unity-check.ps1 -Step Player -Release` builds without the Development flag.
       Not done: **nobody has listened** (I cannot), so the levels, the reverb's size and the balance of the score are as the prototype's numbers give them and untuned by ear; IL2CPP; crackle detection (nothing counts a missed
       audio block); `tools/player-keys.ps1` (needs the PC free).
-- [ ] 13. Integration and **Gate B**: the benchmark pilot through the populated city, per-tier runs, results in `performance_results.md`.
-
+- [x] 13. Integration and **Gate B** (2026-10-23; **closed on your word that the measurement is acceptable for now, with Medium and Ultra measured once each**). Plan: `implementation_plan_step13.md` (approved: default tier =
+      highest with 20% headroom, no IL2CPP, ask before trimming).
+      **Built.** (A) `StreetRoutes` (the plaza ring, 690 m over eight crosswalks; the junction loop, 250 m) made from `CityNav`; `--benchmark-route street|junction`; a pilot that notices it is held up, steps aside
+      (alternating sides, a jump every other time) and counts `stalled_s` and `detours`, and a run held up for over 15% is invalid. A free walker takes 158 s a lap, so the street recording is 160 s. (B) The summary has
+      allocation a frame, frames with a collection, the people and vehicles drawn and the sound's cost (`IBenchmarkCounters`, offered by the crowd, the traffic and the sound), plus `hitches.csv` and `warmup_hitches.csv`;
+      `tools/gate-b.ps1` waits for a quiet machine, refuses a stale player, alternates the tiers and prints the table and the highest tier with 20% headroom (`-ReportFrom` prints one for runs already made);
+      `unity-check.ps1 -Step Player -Release` builds without the Development flag. (C) `IntegrationPlayTests` (5): three games in a row leave an identical census of objects and a flat heap; a tier sweep through the
+      quality director resizes the people, vehicles, aircraft and lights; a slow machine makes the governor step the tier down and it holds there; pause and resume freeze the world and duck the sound; and 90 s of the
+      street route at Ultra with everything on runs clean. **They found one leak, mended:** every game left nine silent audio clips behind (the clips that keep each synthesised source pulling).
+      **Measured** (details and the table in `performance_results.md`; raw data in `benchmarks/`): Street route, Development player, everything on. **Medium (the default): 88.9 FPS, p99 15.6 ms, worst 23 ms, no frame over
+      33.3 ms: Gate B passes with 53% headroom. Ultra (400 people, 96 vehicles, 36 aircraft): 73.3 FPS, p99 17.9 ms**, one 296 ms frame mid-run that was outside the game's own work. Launch to the first playing frame 8.1 s.
+      **Not done:** Performance, Low and High were not measured, nothing was repeated (so no median of three), and the junction stress route was not run; **the default tier stays Medium**, although by the rule you chose
+      Ultra would win on these numbers once three runs of each tier are in. `tools/player-keys.ps1` (needs the PC free) was not re-run. IL2CPP was skipped on your answer.
+      **Known and left:** about half a second of stutter after New Game (a 225 ms first frame that is there with everything off, the actors starting in the same frame, and a 280 to 310 ms stall when the crowd and the
+      traffic first draw: probably shader compilation in the driver); ways to remove it are in `performance_results.md` and the choice is yours. Garbage: about 4 KB a frame on the main thread, a collection every 18 to 20 s,
+      none coinciding with a hitch. The sound's levels are as the prototype's numbers give them, untuned by ear.
+      **Milestone 3 as a whole:** people (110 to 400) and traffic (52 to 96 vehicles, 20 to 36 aircraft) that really cross roads and stop for each other, the whole city's sound, and the gate passed with all of it on. Verified
+      2026-10-23 on the final code: 1,511 in the fast loop, `unity-check.ps1 -Step All` green (1,652 EditMode, 333 PlayMode; about 23 minutes with the fast loop).
 ---
 
 # Milestone 1 — task checklist (complete)

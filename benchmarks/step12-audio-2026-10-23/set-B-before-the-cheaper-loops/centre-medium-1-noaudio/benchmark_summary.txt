@@ -1,0 +1,36 @@
+unity: 6000.6.6f1
+build: Development, Mono
+gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+window: 1920x1080, Windowed
+internal_height: 540
+quality: Medium, adaptive off
+msaa: 1x
+unity_quality_level: PC
+vsync: 0
+city_build_ms: 1210
+launch_to_play_s: 6.73
+route: centre
+warmup_s: 10
+route_laps: 1
+route_waypoints_reached: 5
+frames: 5451
+duration_s: 60.00
+avg_fps: 90.8
+avg_ms: 11.01
+p50_ms: 10.68
+p95_ms: 13.13
+p99_ms: 15.71
+worst_ms: 30.76
+budget_ms: 33.33
+frames_over_budget: 0
+cpu_avg_ms: 11.01
+gpu_avg_ms: 9.99
+gpu_p99_ms: 12.74
+draw_calls_avg: 306
+draw_calls_max: 441
+triangles_avg: 392714
+triangles_max: 522609
+distance_m: 315.3
+floor_fps: 30
+result: PASS

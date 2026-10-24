@@ -9,6 +9,11 @@ namespace Cypher.Core
     /// toward the next waypoint with ordinary look and move commands, so the real character controller,
     /// collisions and kerbs are all exercised. Closed loop on position, so the route stays the same
     /// whatever the frame rate. Pure: the caller supplies the character's pose and applies the command.
+    /// <para>
+    /// In a populated city something is sometimes in the way. A walker that has gone less than <see cref="StallDistance"/> in <see cref="StallWindow"/> while facing the way it
+    /// wants to go is held up: it steps aside for <see cref="DetourSeconds"/> (alternating sides, and jumping every other time) and carries on. The time it was held up is counted,
+    /// so a run that was mostly spent stuck says so.
+    /// </para>
     /// </summary>
     public sealed class BenchmarkPilot
     {
@@ -19,11 +24,16 @@ namespace Cypher.Core
             /// <summary>Run on the leg that ends at this waypoint.</summary>
             public readonly bool Sprint;
 
-            public Waypoint(double x, double z, bool sprint)
+            /// <summary>How close counts as having arrived. A corner of a pavement wants less than the middle of a road.</summary>
+            public readonly double Radius;
+
+            public Waypoint(double x, double z, bool sprint, double radius = ArrivalRadius)
             {
+                if (!(radius > 0)) throw new ArgumentOutOfRangeException(nameof(radius), radius, "a waypoint has a size");
                 X = x;
                 Z = z;
                 Sprint = sprint;
+                Radius = radius;
             }
         }
 
@@ -41,8 +51,20 @@ namespace Cypher.Core
         /// <summary>No sprinting while still turning.</summary>
         const double SprintAngle = 0.3;
 
+        /// <summary>A walker that goes less than <see cref="StallDistance"/> metres in <see cref="StallWindow"/> seconds while facing within <see cref="FacingAngle"/> of its waypoint is held up.</summary>
+        public const double StallWindow = 1.0;
+        public const double StallDistance = 0.5;
+        public const double DetourSeconds = 0.9;
+        const double FacingAngle = 0.8;
+        const double DetourForward = 0.5;
+
         readonly Waypoint[] _route;
         readonly double _sensitivity;
+
+        bool _anchored;
+        double _anchorX, _anchorZ, _anchorAt;
+        double _detourUntil = -1;
+        int _detourSide = -1;
 
         public BenchmarkPilot(IReadOnlyList<Waypoint> route, double sensitivity = LookState.DefaultSensitivity)
         {
@@ -101,15 +123,21 @@ namespace Cypher.Core
             };
         }
 
-        public static IReadOnlyList<Waypoint> Route(BenchmarkRoute route)
+        /// <param name="nav">The city's pedestrian graph, which the routes on the pavement are made from (the other routes do not need it).</param>
+        public static IReadOnlyList<Waypoint> Route(BenchmarkRoute route, CityNav nav = null)
         {
             switch (route)
             {
                 case BenchmarkRoute.Centre: return DefaultRoute;
                 case BenchmarkRoute.City: return CityRoute;
+                case BenchmarkRoute.Street: return StreetRoutes.PlazaRing(Graph(route, nav));
+                case BenchmarkRoute.Junction: return StreetRoutes.JunctionLoop(Graph(route, nav));
                 default: throw new ArgumentOutOfRangeException(nameof(route), route, "unknown benchmark route");
             }
         }
+
+        static CityNav Graph(BenchmarkRoute route, CityNav nav) =>
+            nav ?? throw new ArgumentNullException(nameof(nav), $"the {route} route is made from the city's pedestrian graph");
 
         /// <summary>Index of the waypoint being walked toward.</summary>
         public int Target { get; private set; }
@@ -121,6 +149,15 @@ namespace Cypher.Core
 
         /// <summary>Seconds of simulated time fed in so far.</summary>
         public double Elapsed { get; private set; }
+
+        /// <summary>Seconds spent held up: standing against something, and then stepping round it.</summary>
+        public double StalledSeconds { get; private set; }
+
+        /// <summary>How many times it had to step aside.</summary>
+        public int Detours { get; private set; }
+
+        /// <summary>True while it is stepping round something.</summary>
+        public bool InDetour => Elapsed < _detourUntil;
 
         public int WaypointCount => _route.Length;
 
@@ -135,12 +172,14 @@ namespace Cypher.Core
             Elapsed += dt;
 
             double dx = _route[Target].X - x, dz = _route[Target].Z - z;
-            if (dx * dx + dz * dz <= ArrivalRadius * ArrivalRadius)
+            double arrival = _route[Target].Radius;
+            if (dx * dx + dz * dz <= arrival * arrival)
             {
                 WaypointsReached++;
                 Target = (Target + 1) % _route.Length;
                 dx = _route[Target].X - x;
                 dz = _route[Target].Z - z;
+                _anchored = false;
             }
 
             double error = WrapToPi(Math.Atan2(dx, dz) - yaw);
@@ -152,7 +191,49 @@ namespace Cypher.Core
             double wantedPitch = PitchCentre + PitchAmplitude * Math.Sin(2 * Math.PI * Elapsed / PitchPeriod);
             double tilt = Clamp(wantedPitch - pitch, -MaxPitchRate * dt, MaxPitchRate * dt);
 
-            return new PlayerCommand(forward, 0, sprint, false, false, turn / _sensitivity, tilt / _sensitivity);
+            bool jump = false;
+            double strafe = 0;
+            if (InDetour)
+            {
+                StalledSeconds += dt;
+                strafe = _detourSide;
+                forward = Math.Min(forward, DetourForward);
+                sprint = false;
+                _anchored = false;
+            }
+            else if (off < FacingAngle)
+            {
+                if (!_anchored)
+                {
+                    _anchored = true;
+                    _anchorX = x;
+                    _anchorZ = z;
+                    _anchorAt = Elapsed;
+                }
+                else if (Elapsed - _anchorAt >= StallWindow)
+                {
+                    double moved = Math.Sqrt((x - _anchorX) * (x - _anchorX) + (z - _anchorZ) * (z - _anchorZ));
+                    if (moved < StallDistance)
+                    {
+                        Detours++;
+                        StalledSeconds += Elapsed - _anchorAt;
+                        _detourUntil = Elapsed + DetourSeconds;
+                        _detourSide = -_detourSide;
+                        jump = Detours % 2 == 0;
+                        strafe = _detourSide;
+                        forward = Math.Min(forward, DetourForward);
+                        sprint = false;
+                    }
+                    _anchored = false;
+                }
+            }
+            else
+            {
+                // turning on the spot is not being held up
+                _anchored = false;
+            }
+
+            return new PlayerCommand(forward, strafe, sprint, false, jump, turn / _sensitivity, tilt / _sensitivity);
         }
 
         static double WrapToPi(double angle)

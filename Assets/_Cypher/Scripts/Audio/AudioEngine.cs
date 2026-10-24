@@ -20,7 +20,7 @@ namespace Cypher.Audio
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(60)]   // after the player and the actors have moved this frame
-    public sealed class AudioEngine : MonoBehaviour
+    public sealed class AudioEngine : MonoBehaviour, IBenchmarkCounters
     {
         public const uint Seed = 20771;
         public const float StatusLogSeconds = 15f;
@@ -129,6 +129,22 @@ namespace Cypher.Audio
             _mainFrames = 0;
         }
 
+        int IBenchmarkCounters.CounterCount => 4;
+
+        string IBenchmarkCounters.CounterName(int index) => index == 0 ? "audio_thread_ms" : index == 1 ? "audio_thread_share" : index == 2 ? "audio_main_ms" : "audio_voices";
+
+        double IBenchmarkCounters.Counter(int index)
+        {
+            if (!_started) return 0;
+            switch (index)
+            {
+                case 0: return Cost.AudioThreadMs;
+                case 1: return Cost.AudioThreadShare;
+                case 2: return Cost.MainThreadAverageMs;
+                default: return _voices.Active;
+            }
+        }
+
         /// <summary>True from a new game until the title again.</summary>
         public bool WorldRunning => _bed != null;
 
@@ -235,6 +251,7 @@ namespace Cypher.Audio
         void StartWorld()
         {
             if (_bed != null) TearDownWorld();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             _stopAt = -1;
             var world = new GameObject("World sound");
             world.transform.SetParent(transform, false);
@@ -252,7 +269,7 @@ namespace Cypher.Audio
             _master.Stage.FadeIn();
             _worldAccumulator = 0;
             ResetMainThreadCost();
-            Debug.Log("[Cypher] audio: the world begins");
+            Debug.Log($"[Cypher] audio: the world begins, started in {clock.ElapsedMilliseconds} ms");
         }
 
         void TearDownWorld()

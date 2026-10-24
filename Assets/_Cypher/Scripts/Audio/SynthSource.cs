@@ -15,6 +15,7 @@ namespace Cypher.Audio
     public sealed class SynthSource : MonoBehaviour
     {
         AudioSource _source;
+        AudioClip _silence;
         volatile SynthGraph _graph;
         Exception _failure;
         int _callbacks;
@@ -71,6 +72,7 @@ namespace Cypher.Audio
             // a short silent clip with the channels the graph will fill: the source needs something to play for the callbacks to come
             var clip = AudioClip.Create(name + " (silence)", 2048, channels, graph.SampleRate, false);
             s.clip = clip;
+            host._silence = clip;
             host._graph = graph;
             return host;
         }
@@ -114,6 +116,8 @@ namespace Cypher.Audio
         void OnDestroy()
         {
             _graph = null;
+            // the clip is ours: left behind it would be one more for every game started
+            if (_silence) Destroy(_silence);
         }
     }
 }

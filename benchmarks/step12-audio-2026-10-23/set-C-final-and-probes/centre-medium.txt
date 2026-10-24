@@ -1,0 +1,161 @@
+﻿=== centre-medium round 1 audio (CPU 28% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 60 s, Medium, centre route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1442
+  launch_to_play_s: 8.23
+  route: centre
+  warmup_s: 10
+  route_laps: 1
+  route_waypoints_reached: 5
+  frames: 4990
+  duration_s: 60.01
+  avg_fps: 83.1
+  avg_ms: 12.03
+  p50_ms: 11.58
+  p95_ms: 15.58
+  p99_ms: 18.96
+  worst_ms: 96.34
+  budget_ms: 33.33
+  frames_over_budget: 3
+  cpu_avg_ms: 12.03
+  gpu_avg_ms: 10.84
+  gpu_p99_ms: 15.94
+  draw_calls_avg: 305
+  draw_calls_max: 566
+  triangles_avg: 392554
+  triangles_max: 785166
+  distance_m: 315.8
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\centre-medium-1-audio
+OK
+=== centre-medium round 1 noaudio (CPU 87% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 60 s, Medium, centre route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1565
+  launch_to_play_s: 8.18
+  route: centre
+  warmup_s: 10
+  route_laps: 1
+  route_waypoints_reached: 5
+  frames: 5059
+  duration_s: 60.00
+  avg_fps: 84.3
+  avg_ms: 11.86
+  p50_ms: 11.39
+  p95_ms: 15.22
+  p99_ms: 18.36
+  worst_ms: 30.43
+  budget_ms: 33.33
+  frames_over_budget: 0
+  cpu_avg_ms: 11.86
+  gpu_avg_ms: 10.68
+  gpu_p99_ms: 15.08
+  draw_calls_avg: 306
+  draw_calls_max: 443
+  triangles_avg: 392640
+  triangles_max: 523429
+  distance_m: 315.8
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\centre-medium-1-noaudio
+OK
+=== centre-medium round 2 audio (CPU 20% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 60 s, Medium, centre route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1299
+  launch_to_play_s: 7.56
+  route: centre
+  warmup_s: 10
+  route_laps: 1
+  route_waypoints_reached: 5
+  frames: 5322
+  duration_s: 60.01
+  avg_fps: 88.7
+  avg_ms: 11.28
+  p50_ms: 10.99
+  p95_ms: 13.74
+  p99_ms: 15.56
+  worst_ms: 21.24
+  budget_ms: 33.33
+  frames_over_budget: 0
+  cpu_avg_ms: 11.27
+  gpu_avg_ms: 10.22
+  gpu_p99_ms: 13.13
+  draw_calls_avg: 307
+  draw_calls_max: 443
+  triangles_avg: 393451
+  triangles_max: 523369
+  distance_m: 315.8
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\centre-medium-2-audio
+OK
+=== centre-medium round 2 noaudio (CPU 1% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 60 s, Medium, centre route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1198
+  launch_to_play_s: 6.90
+  route: centre
+  warmup_s: 10
+  route_laps: 1
+  route_waypoints_reached: 5
+  frames: 5401
+  duration_s: 60.01
+  avg_fps: 90.0
+  avg_ms: 11.11
+  p50_ms: 10.83
+  p95_ms: 13.45
+  p99_ms: 15.82
+  worst_ms: 21.74
+  budget_ms: 33.33
+  frames_over_budget: 0
+  cpu_avg_ms: 11.11
+  gpu_avg_ms: 10.11
+  gpu_p99_ms: 13.24
+  draw_calls_avg: 306
+  draw_calls_max: 441
+  triangles_avg: 393242
+  triangles_max: 522669
+  distance_m: 315.3
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\centre-medium-2-noaudio
+OK
+done

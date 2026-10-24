@@ -16,7 +16,7 @@ namespace Cypher.Actors
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(41)]   // after the crowd, which is after the player and the title camera have moved the camera
-    public sealed class TrafficController : MonoBehaviour
+    public sealed class TrafficController : MonoBehaviour, IBenchmarkCounters
     {
         /// <summary>The simulation's fixed step (the prototype's).</summary>
         public const double StepSeconds = 1.0 / 60;
@@ -46,6 +46,22 @@ namespace Cypher.Actors
 
         /// <summary>The running simulation, or null while there is no traffic (before a game, and on the title screen).</summary>
         public TrafficSim Sim => _sim;
+
+        int IBenchmarkCounters.CounterCount => 4;
+
+        string IBenchmarkCounters.CounterName(int index) => index == 0 ? "vehicles_active" : index == 1 ? "vehicles_drawn" : index == 2 ? "aircraft_drawn" : "vehicle_lights_lit";
+
+        double IBenchmarkCounters.Counter(int index)
+        {
+            if (_sim == null || _renderer == null) return 0;
+            switch (index)
+            {
+                case 0: return _sim.Vehicles.Count;
+                case 1: return _renderer.Frame.GroundTotal;
+                case 2: return _renderer.Frame.AircraftTotal;
+                default: return _lights != null ? _lights.Lit : 0;
+            }
+        }
 
         public TrafficRenderer Renderer => _renderer;
 
@@ -116,12 +132,16 @@ namespace Cypher.Actors
                 Debug.Log("[Cypher] traffic: switched off by --no-traffic");
                 return;
             }
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             QualityTier tier = quality != null ? quality.Tier : QualityTiers.For(QualityPreset.Medium);
             Vector3 at = player.transform.position;
             CityNav nav = CityNav.Build(city.Slice.Plan);
+            long navMs = clock.ElapsedMilliseconds;
             _sim = TrafficSim.Create(nav, at.x, at.z, tier.GroundVehicles, tier.AircraftCount, rules: TrafficRules.City);
+            long simMs = clock.ElapsedMilliseconds;
             _renderer?.Dispose();
             _renderer = new TrafficRenderer(materials, nav);
+            long rendererMs = clock.ElapsedMilliseconds;
             _sim.InView = IsInView;
             _proxies = _proxies ?? new TrafficProxies(transform);
             _lights = _lights ?? new TrafficLights(transform);
@@ -129,7 +149,7 @@ namespace Cypher.Actors
             _accumulator = 0;
             _nextStatusLog = Time.realtimeSinceStartup + StatusLogSeconds;
             ApplyTier(tier);
-            Debug.Log($"[Cypher] traffic: {tier.GroundVehicles} vehicles and {tier.AircraftCount} aircraft of a fleet of {_sim.Fleet.Count} and {_sim.AircraftFleet.Count} ({tier.Preset} tier), {tier.VehicleLights} lights, {_renderer.SignalHeads} signal heads");
+            Debug.Log($"[Cypher] traffic: {tier.GroundVehicles} vehicles and {tier.AircraftCount} aircraft of a fleet of {_sim.Fleet.Count} and {_sim.AircraftFleet.Count} ({tier.Preset} tier), {tier.VehicleLights} lights, {_renderer.SignalHeads} signal heads; started in {clock.ElapsedMilliseconds} ms (graph {navMs}, simulation {simMs - navMs}, renderer and its meshes {rendererMs - simMs})");
         }
 
         /// <summary>Remove the traffic (the title screen has none).</summary>

@@ -1,0 +1,81 @@
+﻿=== city-medium round 1 audio (CPU 6% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 100 s, Medium, city route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1511
+  launch_to_play_s: 7.69
+  route: city
+  warmup_s: 10
+  route_laps: 0
+  route_waypoints_reached: 3
+  frames: 10040
+  duration_s: 100.01
+  avg_fps: 100.4
+  avg_ms: 9.96
+  p50_ms: 9.82
+  p95_ms: 12.80
+  p99_ms: 15.54
+  worst_ms: 26.17
+  budget_ms: 33.33
+  frames_over_budget: 0
+  cpu_avg_ms: 9.96
+  gpu_avg_ms: 8.87
+  gpu_p99_ms: 12.59
+  draw_calls_avg: 170
+  draw_calls_max: 445
+  triangles_avg: 231559
+  triangles_max: 523743
+  distance_m: 447.8
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\city-medium-1-audio
+OK
+=== city-medium round 1 noaudio (CPU 9% before)
+== Benchmark (1920 x 1080, 10 s warm-up + 100 s, Medium, city route)
+  unity: 6000.6.6f1
+  build: Development, Mono
+  gpu: AMD Radeon(TM) Vega 8 Graphics (Direct3D11)
+  cpu: AMD Ryzen 5 3550H with Radeon Vega Mobile Gfx , 30673 MB
+  window: 1920x1080, Windowed
+  internal_height: 540
+  quality: Medium, adaptive off
+  msaa: 1x
+  unity_quality_level: PC
+  vsync: 0
+  city_build_ms: 1201
+  launch_to_play_s: 7.06
+  route: city
+  warmup_s: 10
+  route_laps: 0
+  route_waypoints_reached: 3
+  frames: 11014
+  duration_s: 100.00
+  avg_fps: 110.1
+  avg_ms: 9.08
+  p50_ms: 8.93
+  p95_ms: 11.29
+  p99_ms: 13.18
+  worst_ms: 18.36
+  budget_ms: 33.33
+  frames_over_budget: 0
+  cpu_avg_ms: 9.08
+  gpu_avg_ms: 8.16
+  gpu_p99_ms: 11.71
+  draw_calls_avg: 229
+  draw_calls_max: 444
+  triangles_avg: 241303
+  triangles_max: 523001
+  distance_m: 686.7
+  floor_fps: 30
+  result: PASS
+  exit 0: passed the 30 FPS gate. Results in C:\Users\SCOTTK~1\AppData\Local\Temp\cypher-unity\audio-bench\city-medium-1-noaudio
+OK
+done

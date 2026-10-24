@@ -113,9 +113,22 @@ namespace Cypher.Tests
         [TestCase("city", BenchmarkRoute.City)]
         [TestCase("CITY", BenchmarkRoute.City)]
         [TestCase("centre", BenchmarkRoute.Centre)]
+        [TestCase("street", BenchmarkRoute.Street)]
+        [TestCase("Junction", BenchmarkRoute.Junction)]
         public void TheRouteIsReadByName(string text, BenchmarkRoute expected)
         {
             Assert.AreEqual(expected, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", text }).Route);
+        }
+
+        [Test]
+        public void EachRouteRecordsAsLongAsItNeedsUnlessToldOtherwise()
+        {
+            Assert.AreEqual(160, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "street" }).DurationSeconds);
+            Assert.AreEqual(90, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "junction" }).DurationSeconds);
+            Assert.AreEqual(60, BenchmarkOptions.Parse(new[] { "--benchmark" }).DurationSeconds);
+            Assert.AreEqual(45, BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "street", "--benchmark-seconds", "45" }).DurationSeconds);
+            Assert.AreEqual(BenchmarkOptions.DefaultStreetDurationSeconds, BenchmarkOptions.DefaultDuration(BenchmarkRoute.Street));
+            Assert.AreEqual(BenchmarkOptions.DefaultDurationSeconds, BenchmarkOptions.DefaultDuration(BenchmarkRoute.Centre));
         }
 
         [Test]

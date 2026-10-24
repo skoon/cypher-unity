@@ -18,6 +18,11 @@ namespace Cypher.Tests
             public double X, Z, Travelled;
             public double MaxSpeed;
 
+            /// <summary>Somewhere the character cannot stand: a move into it is cancelled, along the axis that is blocked if the other is clear.</summary>
+            public Func<double, double, bool> Solid;
+
+            public readonly System.Collections.Generic.List<PlayerCommand> Commands = new System.Collections.Generic.List<PlayerCommand>();
+
             public Walker(BenchmarkPilot pilot, double x = 0, double z = 0)
             {
                 Pilot = pilot;
@@ -31,11 +36,19 @@ namespace Cypher.Tests
                 for (int i = 0; i < steps; i++)
                 {
                     PlayerCommand cmd = Pilot.Next(X, Z, Look.Yaw, Look.Pitch, dt);
+                    Commands.Add(cmd);
                     Look.Apply(cmd.LookX, cmd.LookY);
                     Vec3 move = Motor.Step(cmd, Look.Yaw, dt, false);
-                    X += move.X;
-                    Z += move.Z;
-                    Travelled += Math.Sqrt(move.X * move.X + move.Z * move.Z);
+                    double nx = X + move.X, nz = Z + move.Z;
+                    if (Solid != null && Solid(nx, nz))
+                    {
+                        if (!Solid(nx, Z)) nz = Z;
+                        else if (!Solid(X, nz)) nx = X;
+                        else { nx = X; nz = Z; }
+                    }
+                    Travelled += Math.Sqrt((nx - X) * (nx - X) + (nz - Z) * (nz - Z));
+                    X = nx;
+                    Z = nz;
                     MaxSpeed = Math.Max(MaxSpeed, Motor.PlanarSpeed);
                     Motor.ReportResult(true, false);   // flat ground
                 }
@@ -186,6 +199,136 @@ namespace Cypher.Tests
             Assert.AreEqual(1, pilot.Target);
             Assert.AreEqual(0, pilot.Laps);
             Assert.AreEqual(Dt, pilot.Elapsed, 1e-12);
+        }
+
+        // ---------------------------------------------------------------- held up
+
+        static readonly BenchmarkPilot.Waypoint[] North = { new BenchmarkPilot.Waypoint(0, 100, false), new BenchmarkPilot.Waypoint(0, 300, false) };
+
+        [Test]
+        public void AWalkerWithNothingInTheWayIsNeverHeldUpOnAnyRoute()
+        {
+            foreach (BenchmarkRoute name in new[] { BenchmarkRoute.Centre, BenchmarkRoute.City })
+            {
+                var walker = new Walker(new BenchmarkPilot(BenchmarkPilot.Route(name)));
+                walker.Run(180);
+                Assert.AreEqual(0, walker.Pilot.Detours, name.ToString());
+                Assert.AreEqual(0, walker.Pilot.StalledSeconds, name.ToString());
+                Assert.IsFalse(walker.Commands.Any(c => c.Strafe != 0), name + " never sidesteps");
+            }
+        }
+
+        [Test]
+        public void TurningRightRoundOnTheSpotIsNotBeingHeldUp()
+        {
+            var walker = new Walker(new BenchmarkPilot(new[] { new BenchmarkPilot.Waypoint(0, -60, false), new BenchmarkPilot.Waypoint(0, 60, false) }));
+            walker.Run(8);   // facing +Z, the first waypoint behind: half a turn, then off
+            Assert.AreEqual(0, walker.Pilot.Detours);
+            Assert.AreEqual(0, walker.Pilot.StalledSeconds);
+        }
+
+        [Test]
+        public void SomeoneStandingInThePathIsSteppedAroundAndTheWalkCarriesOn()
+        {
+            var walker = new Walker(new BenchmarkPilot(North)) { Solid = (x, z) => Math.Abs(x) < 0.6 && z > 20 && z < 20.8 };
+            walker.Run(14);
+            Assert.AreEqual(1, walker.Pilot.Detours, "once");
+            Assert.That(walker.Pilot.StalledSeconds, Is.InRange(1.5, 3.0), "a second against them and a little under a second round them");
+            Assert.Greater(walker.Z, 40, "and well on its way after");
+            Assert.Less(walker.Pilot.StalledSeconds / 14, BenchmarkRecorder.MaximumStalledShare);
+        }
+
+        [Test]
+        public void AWallThatCannotBePassedKeepsItSteppingAsideAndCountsAllOfIt()
+        {
+            var walker = new Walker(new BenchmarkPilot(North)) { Solid = (x, z) => Math.Abs(x) < 80 && z > 20 && z < 21 };
+            walker.Run(40);
+            Assert.GreaterOrEqual(walker.Pilot.Detours, 10);
+            Assert.Greater(walker.Pilot.StalledSeconds / 40, BenchmarkRecorder.MaximumStalledShare, "such a run would be called invalid");
+            Assert.Less(walker.Z, 21, "it never got through");
+        }
+
+        [Test]
+        public void ItStepsAsideToAlternateSidesAndJumpsOnEverySecondTime()
+        {
+            var walker = new Walker(new BenchmarkPilot(North)) { Solid = (x, z) => Math.Abs(x) < 80 && z > 20 && z < 21 };
+            walker.Run(25);
+            var strafes = new System.Collections.Generic.List<double>();
+            double last = 0;
+            foreach (PlayerCommand c in walker.Commands)
+            {
+                if (c.Strafe != 0 && last == 0) strafes.Add(c.Strafe);
+                last = c.Strafe;
+            }
+            Assert.GreaterOrEqual(strafes.Count, 4);
+            for (int i = 1; i < strafes.Count; i++) Assert.AreNotEqual(strafes[i - 1], strafes[i], $"detour {i} goes the other way from the one before");
+            int jumps = walker.Commands.Count(c => c.JumpPressed);
+            Assert.AreEqual(walker.Pilot.Detours / 2, jumps, "every second detour includes a jump");
+        }
+
+        [Test]
+        public void SteppingAsideIsWalkedNotRunAndKeepsHeadingForTheWaypoint()
+        {
+            var route = new[] { new BenchmarkPilot.Waypoint(0, 100, true), new BenchmarkPilot.Waypoint(0, 300, true) };
+            var walker = new Walker(new BenchmarkPilot(route)) { Solid = (x, z) => Math.Abs(x) < 80 && z > 20 && z < 21 };
+            walker.Run(6);
+            Assert.IsTrue(walker.Commands.Where(c => c.Strafe != 0).All(c => !c.Sprint), "no sprint while stepping aside");
+            Assert.IsTrue(walker.Commands.Where(c => c.Strafe != 0).All(c => c.Forward <= 0.5), "and only a gentle push forward");
+        }
+
+        [Test]
+        public void AWaypointBehindAWallStaysUnreachedAndHoldsTheWalkerUp()
+        {
+            var route = new[] { new BenchmarkPilot.Waypoint(0, 30, false, 0.5), new BenchmarkPilot.Waypoint(0, 200, false) };
+            var walker = new Walker(new BenchmarkPilot(route)) { Solid = (x, z) => z > 29 && z < 29.4 && Math.Abs(x) < 80 };
+            walker.Run(14);
+            Assert.AreEqual(0, walker.Pilot.WaypointsReached);
+            Assert.GreaterOrEqual(walker.Pilot.Detours, 1);
+        }
+
+        [Test]
+        public void AWaypointIsReachedWithinItsOwnRadiusNotTheDefault()
+        {
+            var tight = new[] { new BenchmarkPilot.Waypoint(1, 0, false, 0.5), new BenchmarkPilot.Waypoint(50, 0, false) };
+            var pilot = new BenchmarkPilot(tight);
+            pilot.Next(0, 0, 0, 0, Dt);
+            Assert.AreEqual(0, pilot.WaypointsReached, "a metre away is outside a half-metre waypoint");
+            pilot.Next(0.4, 0, 0, 0, Dt);
+            Assert.AreEqual(0, pilot.WaypointsReached, "0.6 m away is still outside it");
+            pilot.Next(0.6, 0.2, 0, 0, Dt);
+            Assert.AreEqual(1, pilot.WaypointsReached, "0.45 m away is inside it");
+            Assert.AreEqual(BenchmarkPilot.ArrivalRadius, new BenchmarkPilot.Waypoint(0, 0, false).Radius, "the usual size when none is given");
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BenchmarkPilot.Waypoint(0, 0, false, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new BenchmarkPilot.Waypoint(0, 0, false, -1));
+        }
+
+        [Test]
+        public void ThePlazaRingIsWalkedRoundByAFreeWalkerInAboutTwoAndAHalfMinutes()
+        {
+            CityNav nav = CityNav.Build(CityPlan.Generate());
+            var walker = new Walker(new BenchmarkPilot(StreetRoutes.PlazaRing(nav)));
+            double lapAt = -1;
+            for (int i = 0; i < 400 && lapAt < 0; i++)
+            {
+                walker.Run(1);
+                if (walker.Pilot.Laps >= 1) lapAt = walker.Pilot.Elapsed;
+            }
+            Console.WriteLine($"STREET lap of the free walker: {lapAt:0} s, {walker.Travelled:0} m");
+            Assert.That(lapAt, Is.InRange(120, 200), "a lap is a couple of minutes: a recording of that long is one whole lap");
+            Assert.AreEqual(0, walker.Pilot.Detours);
+            // the cut corners shorten the lap a little
+            Assert.That(walker.Travelled, Is.InRange(600, 720));
+        }
+
+        [Test]
+        public void TheJunctionLoopIsWalkedByAFreeWalkerAtWalkingPace()
+        {
+            CityNav nav = CityNav.Build(CityPlan.Generate());
+            var walker = new Walker(new BenchmarkPilot(StreetRoutes.JunctionLoop(nav)));
+            walker.Run(120);
+            Assert.GreaterOrEqual(walker.Pilot.Laps, 1);
+            Assert.AreEqual(0, walker.Pilot.Detours);
+            Assert.LessOrEqual(walker.MaxSpeed, PlayerMotor.WalkSpeed + 1e-6, "never run");
         }
 
         [Test]

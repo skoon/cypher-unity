@@ -15,7 +15,7 @@ namespace Cypher.Actors
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(40)]   // after the player and the title camera have moved the camera
-    public sealed class CrowdController : MonoBehaviour
+    public sealed class CrowdController : MonoBehaviour, IBenchmarkCounters
     {
         /// <summary>The simulation's fixed step (the prototype's).</summary>
         public const double StepSeconds = 1.0 / 60;
@@ -44,6 +44,16 @@ namespace Cypher.Actors
 
         /// <summary>The running simulation, or null while there is no crowd (before a game, and on the title screen).</summary>
         public CrowdSim Sim => _sim;
+
+        int IBenchmarkCounters.CounterCount => 3;
+
+        string IBenchmarkCounters.CounterName(int index) => index == 0 ? "people_active" : index == 1 ? "people_drawn" : "people_full_rig";
+
+        double IBenchmarkCounters.Counter(int index)
+        {
+            if (_sim == null || _renderer == null) return 0;
+            return index == 0 ? _sim.Active.Count : index == 1 ? _renderer.Frame.Total : _renderer.Frame.Count(RigLod.Full);
+        }
 
         public CrowdRenderer Renderer => _renderer;
 
@@ -110,9 +120,11 @@ namespace Cypher.Actors
                 Debug.Log("[Cypher] crowd: switched off by --no-crowd");
                 return;
             }
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             QualityTier tier = quality != null ? quality.Tier : QualityTiers.For(QualityPreset.Medium);
             Vector3 at = player.transform.position;
             CityNav nav = CityNav.Build(city.Slice.Plan);
+            long navMs = clock.ElapsedMilliseconds;
             _sim = CrowdSim.Create(nav, QualityTiers.MaxPedestrians, tier.Pedestrians, at.x, at.z, rules: CrowdRules.City);
             _sim.IsVisible = IsInView;
             _renderer = _renderer ?? new CrowdRenderer(bodyMaterial, shadowMaterial);
@@ -120,7 +132,7 @@ namespace Cypher.Actors
             _accumulator = 0;
             _nextStatusLog = Time.realtimeSinceStartup + StatusLogSeconds;
             ApplyTier(tier);
-            Debug.Log($"[Cypher] crowd: {tier.Pedestrians} people of a pool of {_sim.Pool.Count} ({tier.Preset} tier), full rig within {tier.ActorNear:0} m, box beyond {tier.ActorFar:0} m");
+            Debug.Log($"[Cypher] crowd: {tier.Pedestrians} people of a pool of {_sim.Pool.Count} ({tier.Preset} tier), full rig within {tier.ActorNear:0} m, box beyond {tier.ActorFar:0} m; started in {clock.ElapsedMilliseconds} ms ({navMs} of them the navigation graph)");
         }
 
         /// <summary>Remove the crowd (the title screen has none).</summary>

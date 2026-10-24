@@ -12,11 +12,17 @@ namespace Cypher.Core
 
         /// <summary>A tour of the whole city including its edges and corners.</summary>
         City,
+
+        /// <summary>The loop Gate B is judged on: on the pavements and crosswalks through the middle of the city, past its people and its traffic, as a person would walk.</summary>
+        Street,
+
+        /// <summary>Round the four corners and over the four crosswalks of the central junction, where the most people and vehicles are in view: a stress case.</summary>
+        Junction,
     }
 
     /// <summary>
     /// Command-line switches for the player's benchmark mode:
-    ///   --benchmark [--benchmark-out DIR] [--benchmark-seconds N] [--benchmark-warmup N] [--benchmark-quality PRESET] [--benchmark-route centre|city]
+    ///   --benchmark [--benchmark-out DIR] [--benchmark-seconds N] [--benchmark-warmup N] [--benchmark-quality PRESET] [--benchmark-route centre|city|street|junction]
     /// Anything else on the command line (Unity's own -screen-width and friends) is ignored; a malformed
     /// benchmark switch throws, so a typo cannot silently turn into a different measurement.
     /// </summary>
@@ -34,6 +40,23 @@ namespace Cypher.Core
 
         /// <summary>The city tour is long, so it records longer unless told otherwise.</summary>
         public const double DefaultCityDurationSeconds = 240;
+
+        /// <summary>A lap of the street route takes a free walker 158 s: a recording of this length covers the whole of it, the same ground every time.</summary>
+        public const double DefaultStreetDurationSeconds = 160;
+
+        public const double DefaultJunctionDurationSeconds = 90;
+
+        /// <summary>How long a route records unless told otherwise.</summary>
+        public static double DefaultDuration(BenchmarkRoute route)
+        {
+            switch (route)
+            {
+                case BenchmarkRoute.City: return DefaultCityDurationSeconds;
+                case BenchmarkRoute.Street: return DefaultStreetDurationSeconds;
+                case BenchmarkRoute.Junction: return DefaultJunctionDurationSeconds;
+                default: return DefaultDurationSeconds;
+            }
+        }
 
         public bool Enabled { get; }
 
@@ -109,7 +132,7 @@ namespace Cypher.Core
             }
 
             if (!enabled && anyValue) throw new ArgumentException($"{OutFlag}, {SecondsFlag}, {WarmupFlag}, {QualityFlag} and {RouteFlag} only make sense with {BenchmarkFlag}");
-            if (!durationGiven && route == BenchmarkRoute.City) duration = DefaultCityDurationSeconds;
+            if (!durationGiven) duration = DefaultDuration(route);
             return enabled ? new BenchmarkOptions(true, outDir, warmup, duration, quality, route) : Disabled;
         }
 
