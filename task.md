@@ -254,6 +254,12 @@ Milestone 3: living streets (steps 9 to 13 of `implementation_plan_m2.md`; Gate 
 
 Also done ahead of schedule: `ResolutionScaler` (step 7 maths).
 
+## Open follow-ups
+
+- [ ] Compiler warnings: 36 CS0618 from `FindObjectsByType(..., FindObjectsSortMode.None)` in 5 files (`BenchmarkRunner`, `AudioMixerTests`, `AudioVoicesPlayTests`,
+      `AuthoredPlayTests` and one more; drop the sort-mode argument) and 2 CS8321 for the unused local function `Count` in `AudioWorldPlayTests.cs:90`.
+      (`FindFirstObjectByType` → `FindAnyObjectByType` done 2026-10-24, 102 calls in 18 files.)
+
 ## Verifying
 
 Editor: `D:\source\Unity\6000.6.6f1\Editor\Unity.exe` (reinstalled with Windows standalone support; the project
