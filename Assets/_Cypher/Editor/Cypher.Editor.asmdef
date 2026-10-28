@@ -7,6 +7,7 @@
         "Cypher.City",
         "Cypher.Game",
         "Cypher.Actors",
+        "Cypher.Rpg",
         "Cypher.Audio",
         "Cypher.Perf",
         "Cypher.Player",

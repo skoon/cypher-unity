@@ -4,13 +4,17 @@ using System.Text.RegularExpressions;
 
 namespace Cypher.Core
 {
-    /// <summary>The actions the player can rebind.</summary>
-    public enum GameAction { MoveForward, MoveBack, MoveLeft, MoveRight, Jump, Sprint, Crouch }
+    /// <summary>The actions the player can rebind. New ones go at the end: the order is the Controls screen's and the table's.</summary>
+    public enum GameAction
+    {
+        MoveForward, MoveBack, MoveLeft, MoveRight, Jump, Sprint, Crouch,
+        Interact, Scan, Inventory, Journal, Fire, Aim, Reload, Weapon1, Weapon2, Weapon3,
+    }
 
     /// <summary>One binding place of an action: two for keyboard and mouse, one for a gamepad.</summary>
     public enum BindingSlot { Primary = 0, Secondary = 1, Gamepad = 2 }
 
-    public enum ActionGroup { Movement, Actions }
+    public enum ActionGroup { Movement, Actions, Combat, Menus }
 
     public sealed class ActionInfo
     {
@@ -66,6 +70,17 @@ namespace Cypher.Core
             new ActionInfo(GameAction.Jump, "jump", "Jump", ActionGroup.Actions, "<Keyboard>/space", null, "<Gamepad>/buttonSouth"),
             new ActionInfo(GameAction.Sprint, "sprint", "Sprint", ActionGroup.Actions, "<Keyboard>/leftShift", "<Keyboard>/rightShift", "<Gamepad>/leftStickPress"),
             new ActionInfo(GameAction.Crouch, "crouch", "Crouch", ActionGroup.Actions, "<Keyboard>/leftCtrl", "<Keyboard>/c", "<Gamepad>/buttonEast"),
+            // the prototype's keys: E talks, breaches and trades; F scans; Tab and J open the inventory and the journal; the mouse and R shoot; 1 to 3 pick a gun
+            new ActionInfo(GameAction.Interact, "interact", "Interact", ActionGroup.Actions, "<Keyboard>/e", null, "<Gamepad>/buttonWest"),
+            new ActionInfo(GameAction.Scan, "scan", "Scan", ActionGroup.Actions, "<Keyboard>/f", null, "<Gamepad>/leftShoulder"),
+            new ActionInfo(GameAction.Inventory, "inventory", "Inventory", ActionGroup.Menus, "<Keyboard>/tab", "<Keyboard>/i", "<Gamepad>/dpad/up"),
+            new ActionInfo(GameAction.Journal, "journal", "Journal", ActionGroup.Menus, "<Keyboard>/j", null, "<Gamepad>/dpad/down"),
+            new ActionInfo(GameAction.Fire, "fire", "Fire", ActionGroup.Combat, "<Mouse>/leftButton", null, "<Gamepad>/rightTrigger"),
+            new ActionInfo(GameAction.Aim, "aim", "Aim", ActionGroup.Combat, "<Mouse>/rightButton", null, "<Gamepad>/leftTrigger"),
+            new ActionInfo(GameAction.Reload, "reload", "Reload", ActionGroup.Combat, "<Keyboard>/r", null, "<Gamepad>/buttonNorth"),
+            new ActionInfo(GameAction.Weapon1, "weapon1", "Weapon 1", ActionGroup.Combat, "<Keyboard>/digit1", null, "<Gamepad>/dpad/left"),
+            new ActionInfo(GameAction.Weapon2, "weapon2", "Weapon 2", ActionGroup.Combat, "<Keyboard>/digit2", null, "<Gamepad>/dpad/right"),
+            new ActionInfo(GameAction.Weapon3, "weapon3", "Weapon 3", ActionGroup.Combat, "<Keyboard>/digit3", null, "<Gamepad>/rightShoulder"),
         };
 
         static readonly HashSet<string> MouseButtons = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

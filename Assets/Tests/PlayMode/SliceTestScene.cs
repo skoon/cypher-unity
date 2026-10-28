@@ -16,11 +16,14 @@ namespace Cypher.Tests
 
         /// <summary>
         /// Call from SetUp. Settings live in memory; <paramref name="storage"/> lets a test preload or inspect them. The sound is off unless <paramref name="audio"/> is set, so the many tests that
-        /// have nothing to do with it neither pay for it nor depend on a sound device.
+        /// have nothing to do with it neither pay for it nor depend on a sound device. Saved games live in <paramref name="saves"/>, or in a fresh memory store, so no test
+        /// touches the player's saves.
         /// </summary>
-        public static void Isolate(ISettingsStorage storage = null, FlowOptions options = null, bool audio = false)
+        public static void Isolate(ISettingsStorage storage = null, FlowOptions options = null, bool audio = false, ISaveStorage saves = null)
         {
             SettingsService.StorageFactory = () => storage ?? new MemorySettingsStorage();
+            ISaveStorage saveStorage = saves ?? new MemorySaveStorage();
+            Cypher.Rpg.RpgService.StorageFactory = () => saveStorage;
             FlowOptions o = options ?? new FlowOptions();
             if (!audio && !o.NoAudio) o = new FlowOptions(o.SkipTitle, o.IgnoreUserSettings, o.NoAutoPause, o.NoCrowd, o.NoTraffic, o.NoVehicleLights, noAudio: true);
             LaunchOptions.Override = o;
@@ -30,6 +33,7 @@ namespace Cypher.Tests
         public static void Restore()
         {
             SettingsService.StorageFactory = null;
+            Cypher.Rpg.RpgService.StorageFactory = null;
             LaunchOptions.Override = null;
             Time.timeScale = 1f;
             Cursor.lockState = CursorLockMode.None;

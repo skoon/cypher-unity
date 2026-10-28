@@ -216,5 +216,20 @@ namespace Cypher.Tests
             Assert.Throws<KeyNotFoundException>(() => { object _ = o["missing"]; });
             Assert.Throws<ArgumentNullException>(() => o.Add(null, 1));
         }
+
+        [Test]
+        public void NumbersAreWrittenInTheFewestDigitsThatReadBackAsJavaScriptWritesThem()
+        {
+            Assert.AreEqual("0.1", Json.Write(0.1, false));
+            Assert.AreEqual("0.30000000000000004", Json.Write(0.1 + 0.2, false));
+            Assert.AreEqual("0.3333333333333333", Json.Write(1.0 / 3, false));
+            Assert.AreEqual("123.456", Json.Write(123.456, false));
+            Assert.AreEqual("1e-7", Json.Write(1e-7, false));
+            Assert.AreEqual("1.5e+21", Json.Write(1.5e21, false));
+            foreach (double d in new[] { 0.1, 1.0 / 3, Math.PI, 2.5e-9, 9007199254740993.0 / 3, -0.000123 })
+            {
+                Assert.AreEqual(d, (double)Json.Parse(Json.Write(d, false)), $"{d:R} reads back");
+            }
+        }
     }
 }

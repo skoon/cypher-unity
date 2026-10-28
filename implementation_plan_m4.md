@@ -1,6 +1,6 @@
 # Milestone 4: the game (RPG, jobs, hacking, guns, HUD)
 
-Status: **draft, questions 1 to 4 answered 2026-10-27, waiting for approval (question 5).** Answers: (1) parity, guns mark hits and nothing else, enemies are a later milestone; (2) a marker in the world at each place as well as the HUD; (3) one slot,
+Status: **approved 2026-10-27** (branch `m4`, cut from `main` at d54add7). Answers: (1) parity, guns mark hits and nothing else, enemies are a later milestone; (2) a marker in the world at each place as well as the HUD; (3) one slot,
 autosave every 120 s plus Save in the pause menu, Continue loads it; (4) M4 starts from `main` once the 3D experiment is committed or shelved on its branch.
 
 M2 and M3 ported the city, its people, its traffic and its sound. M4 ports what the prototype does *with* them: everything M2's plan set aside as "RPG layer,

@@ -111,7 +111,7 @@ namespace Cypher.Tests
 
         [TestCase(FlowState.Boot, new[] { FlowCommand.Booted })]
         [TestCase(FlowState.Loading, new[] { FlowCommand.LoadingFinished })]
-        [TestCase(FlowState.Title, new[] { FlowCommand.NewGame, FlowCommand.Quit })]
+        [TestCase(FlowState.Title, new[] { FlowCommand.NewGame, FlowCommand.Continue, FlowCommand.Quit })]
         [TestCase(FlowState.Playing, new[] { FlowCommand.Pause, FlowCommand.TogglePause })]
         [TestCase(FlowState.Paused, new[] { FlowCommand.Resume, FlowCommand.TogglePause, FlowCommand.ReturnToTitle, FlowCommand.Quit })]
         public void EachStateAcceptsExactlyItsCommands(FlowState state, FlowCommand[] accepted)
@@ -230,6 +230,21 @@ namespace Cypher.Tests
         public void UnknownStatesFailLoudly()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => FlowPolicy.For((FlowState)99));
+        }
+
+        [Test]
+        public void ContinueStartsAFreshSessionFromTheTitleOnly()
+        {
+            GameFlowMachine m = InState(FlowState.Title);
+            var seen = new List<FlowTransition>();
+            m.Transitioned += seen.Add;
+            Assert.IsTrue(m.TryHandle(FlowCommand.Continue));
+            Assert.AreEqual(FlowState.Playing, m.State);
+            Assert.AreEqual(FlowCommand.Continue, seen[0].Command);
+            Assert.IsTrue(seen[0].NewSession, "the world is set up as for a new game, then the save is put back");
+            Assert.IsFalse(m.TryHandle(FlowCommand.Continue), "not while playing");
+            m.Handle(FlowCommand.Pause);
+            Assert.IsFalse(m.TryHandle(FlowCommand.Continue), "nor paused");
         }
     }
 }

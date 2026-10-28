@@ -368,7 +368,10 @@ namespace Cypher.UI
 
         public FocusGrid(VisualElement scope)
         {
-            scope.RegisterCallback<NavigationMoveEvent>(OnMove);
+            // Up and down on the way down, before a ScrollView inside the scope can take them to scroll a half-visible row instead; left and right on the way
+            // back up, after a field (a slider, a cycle) has had the chance to use them for its value
+            scope.RegisterCallback<NavigationMoveEvent>(e => { if (IsVertical(e.direction)) OnMove(e); }, TrickleDown.TrickleDown);
+            scope.RegisterCallback<NavigationMoveEvent>(e => { if (!IsVertical(e.direction)) OnMove(e); });
         }
 
         /// <summary>Replace the table. A null cell is a hole.</summary>
@@ -427,13 +430,19 @@ namespace Cypher.UI
             GridPosition to = GridFocus.Move(available, from, direction.Value);
             if (to.Row != from.Row || to.Column != from.Column)
             {
-                _rows[to.Row][to.Column].Focus();
+                VisualElement target = _rows[to.Row][to.Column];
+                target.Focus();
+                // keep it in view in a page that scrolls (the Controls page has more rows than fit), once its new place is laid out
+                ScrollView scroll = target.GetFirstAncestorOfType<ScrollView>();
+                if (scroll != null) target.schedule.Execute(() => scroll.ScrollTo(target));
                 UiSound.Raise(UiSound.Hover);
             }
 
             e.PreventDefault();   // the grid owns arrow movement here, even at an edge, so focus never jumps out by itself
             e.StopPropagation();
         }
+
+        static bool IsVertical(NavigationMoveEvent.Direction d) => d == NavigationMoveEvent.Direction.Up || d == NavigationMoveEvent.Direction.Down;
 
         static MoveDirection? Map(NavigationMoveEvent.Direction d)
         {

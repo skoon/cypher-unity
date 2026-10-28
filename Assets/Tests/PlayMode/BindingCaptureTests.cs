@@ -242,7 +242,7 @@ namespace Cypher.Tests
             var map = BindingMap.Defaults();
 
             Outcome free = Begin(BindingSlot.Primary);
-            yield return PressKey(Key.J);
+            yield return PressKey(Key.K);
             yield return WaitUntilDone(free);
             Assert.AreEqual(AssignOutcome.Applied, map.Assign(GameAction.Jump, BindingSlot.Primary, free.Captured).Outcome);
 

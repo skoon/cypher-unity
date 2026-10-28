@@ -146,8 +146,16 @@ namespace Cypher.UI
         public MenuButton Quit { get; }
 
         public event Action NewGameRequested;
+        public event Action ContinueRequested;
         public event Action OptionsRequested;
         public event Action QuitRequested;
+
+        /// <summary>Offer Continue only when there is a saved game.</summary>
+        public void SetContinue(bool available)
+        {
+            Continue.SetEnabled(available);
+            Continue.SetNote(available ? "" : "NO SAVE YET");
+        }
 
         public TitleScreen(string version)
         {
@@ -179,21 +187,24 @@ namespace Cypher.UI
             Root.Add(Ui.Text("↑ ↓  SELECT      ENTER  CONFIRM      ESC  BACK", "cy-title__keys"));
 
             NewGame.Pressed += () => NewGameRequested?.Invoke();
+            Continue.Pressed += () => ContinueRequested?.Invoke();
             Options.Pressed += () => OptionsRequested?.Invoke();
             Quit.Pressed += () => QuitRequested?.Invoke();
             BuildGrid(Root);
         }
     }
 
-    /// <summary>The pause menu: Resume, Options, Return to Title, Quit.</summary>
+    /// <summary>The pause menu: Resume, Save, Options, Return to Title, Quit.</summary>
     public sealed class PauseScreen : ButtonListScreen
     {
         public MenuButton Resume { get; }
+        public MenuButton Save { get; }
         public MenuButton Options { get; }
         public MenuButton ReturnToTitle { get; }
         public MenuButton Quit { get; }
 
         public event Action ResumeRequested;
+        public event Action SaveRequested;
         public event Action OptionsRequested;
         public event Action ReturnToTitleRequested;
         public event Action QuitRequested;
@@ -205,12 +216,14 @@ namespace Cypher.UI
             panel.Add(Ui.Display("PAUSED", "cy-heading"));
             panel.Add(Ui.Text("SIMULATION SUSPENDED", "cy-sub"));
             Resume = AddButton(panel, new MenuButton("RESUME") { ActivateSound = UiSound.Confirm });
+            Save = AddButton(panel, new MenuButton("SAVE GAME") { ActivateSound = UiSound.Confirm });
             Options = AddButton(panel, new MenuButton("OPTIONS"));
             ReturnToTitle = AddButton(panel, new MenuButton("RETURN TO TITLE"));
             Quit = AddButton(panel, new MenuButton("QUIT", danger: true) { ActivateSound = UiSound.Alert });
             Root.Add(panel);
 
             Resume.Pressed += () => ResumeRequested?.Invoke();
+            Save.Pressed += () => SaveRequested?.Invoke();
             Options.Pressed += () => OptionsRequested?.Invoke();
             ReturnToTitle.Pressed += () => ReturnToTitleRequested?.Invoke();
             Quit.Pressed += () => QuitRequested?.Invoke();

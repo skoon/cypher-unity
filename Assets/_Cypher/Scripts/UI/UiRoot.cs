@@ -167,9 +167,11 @@ namespace Cypher.UI
             _toasts = new ToastLayer(_notices);
 
             _title.NewGameRequested += () => flow.NewGame();
+            _title.ContinueRequested += () => flow.Continue();
             _title.OptionsRequested += OpenOptions;
             _title.QuitRequested += AskQuit;
             _pause.ResumeRequested += () => flow.Resume();
+            _pause.SaveRequested += SaveFromPause;
             _pause.OptionsRequested += OpenOptions;
             _pause.ReturnToTitleRequested += AskReturnToTitle;
             _pause.QuitRequested += AskQuit;
@@ -200,6 +202,13 @@ namespace Cypher.UI
             Refresh();
         }
 
+        /// <summary>Save from the pause menu and say how it went.</summary>
+        void SaveFromPause()
+        {
+            string problem = flow.SaveGame();
+            OnNotice(problem ?? "GAME SAVED");
+        }
+
         void OnNotice(string text)
         {
             _notices.Add(text, Time.unscaledTimeAsDouble);
@@ -222,6 +231,7 @@ namespace Cypher.UI
             if (baseScreen == UiScreen.Loading) _loading.Show();
             else _loading.Leave();
 
+            _title.SetContinue(flow.CanContinue);
             _title.SetShown(baseScreen == UiScreen.Title && !overlay);
             _pause.SetShown(baseScreen == UiScreen.Pause && !overlay);
             _options.SetShown(Contains(UiScreen.Options));

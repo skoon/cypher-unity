@@ -1,3 +1,42 @@
+# Milestone 4 — task checklist (branch `m4`)
+
+Plan: `implementation_plan_m4.md` (approved 2026-10-27: guns mark hits only, a marker in the world at each place, one autosave slot plus Save in the pause menu).
+
+- [x] 1. RPG core, part 1: character (2026-10-27). `Core/Rpg/`: `RpgStats` (attributes, derived stats, XP and street-cred curves, `ModifierSet`, `StatBlock`), `RpgPerks` (25 perks,
+      `PerkTree`), `RpgCyberware` (17 pieces, 5 slots, `CyberwareRig`), `RpgItems` (48 templates, rarities, affixes, names, `LootGenerator`), `Inventory`, `Economy` (5 vendors),
+      `RpgConditions` and `RpgEffects` (read from JSON, as the prototype's tables are written), `RpgSave` (`SaveManager`, migrations), `RpgResult`, `RpgJs` (JavaScript's rounding
+      and truthiness). Checked against the prototype: `tools/gen-golden-rpg.mjs` runs its classes through seeded scripts (92 suites, 2.2 MB,
+      `Fixtures/rpg_character_golden.jsonl`) and `RpgCharacterGoldenTests` (10) replays them, numbers exact; `RpgCharacterTests` (44) ports the prototype's own unit tests.
+      A planted error in a perk, a price and a name was caught by the goldens. 54/54 in the fast loop and in Unity.
+- [x] 2. RPG core, part 2: the world's state (2026-10-28). `RpgLocations` (the 12 places put on the city's blocks by the seed; `RpgCityMeta.From(CityPlan)`), `QuestLog`
+      (stages, objectives by trigger, branches, time limits, outcomes, markers), `DialogueRunner` (entries, gated and hidden options, `once`), `RpgHacking` (breach
+      generation and `BreachSession`, `QuickhackDeck`), and `RpgCore`, the facade: the read and write API and the `rpg:*` events of the prototype's `Systems.js`,
+      autosave every 120 s, save and load. The content (5 jobs, 4 conversations, 12 places) is JSON in `RpgContent.g.cs`, exported once by
+      `tools/gen-rpg-content.mjs` and ours to edit. Checked against the prototype: `tools/gen-golden-rpg-world.mjs` (13 suites, 5.8 MB,
+      `Fixtures/rpg_world_golden.jsonl`) places on test cities and on the real seeded city, 60 breach puzzles played, the deck, and 9 whole `RpgCore` sessions (the
+      main job to each of its three endings with the side jobs after, 6 seeded random sessions over the whole API; about 2,100 operations with every result and
+      event); `RpgWorldGoldenTests` (5) and `RpgWorldTests` (54, the prototype's own tests) pass. Planted errors in a reward, a label and a gate's prefix were caught;
+      two in code the content never reaches were not (the vendor prompt, the "script" source). Found on the way: Unity's Mono writes some doubles in more digits
+      than .NET and JavaScript, so `Json` now writes the shortest form itself (a save is the same text on every runtime). 1,624 in the fast loop; 252 RPG, JSON and
+      settings tests in Unity.
+- [x] 3. Unity service, input, saves and Continue (2026-10-28). New assembly `Cypher.Rpg`: `RpgService` makes a fresh `RpgCore` on New Game (with the prototype's
+      starting kit: pistol, baton, jacket and boots worn, three MaxDocs, PING in the deck; checked against the prototype's golden) or loads the save on Continue, puts the
+      12 places on the real city (`RpgCityMeta.From(CityPlan)`), ticks it at 60 Hz with the player's position only while playing, sends E to it, announces
+      `rpg:promptChanged` for the HUD, and keeps the one save slot in `LocalLow\Cypher\CYPHER\saves\save_auto.json` (`FolderSaveStorage`, written through a temp file;
+      `saves.editor` in the Editor; memory with `--default-settings`). A save also keeps where the player stood and faced (the core's `CaptureWorld`/`LoadedWorld`; not in
+      the prototype), so Continue puts them back there. Game flow: `FlowCommand.Continue` (title only, a new session), `GameFlow.Continue()`, `CanContinue`, `SaveGame()`
+      through an `ISaveGameHost`. UI: the title's CONTINUE is offered only with a save; the pause menu has SAVE GAME (notice "GAME SAVED"). Input: ten new rebindable
+      actions on the Controls screen (Interact E, Scan F, Inventory Tab/I, Journal J, Fire and Aim on the mouse buttons, Reload R, Weapons 1 to 3; gamepad X, LB,
+      D-pad, triggers, Y, RB), read by `GameInput`. Decided without asking: New Game does not erase the save (it is replaced by the first save of the new game);
+      the prototype's sky clock never moves, so vendors get no game hours, as there.
+      **Found and fixed:** with 17 rows the Controls page scrolls, and a Down press was lost at the first row below the fold (the ScrollView took it to scroll);
+      `FocusGrid` now takes Up/Down before the ScrollView and keeps the focused row in view. Tests: `RpgServicePlayTests` (7), `RpgSaveStorageTests` (5),
+      Continue in `GameFlowMachineTests`; 22 older input, settings and UI tests moved off keys the new defaults use. Full run 2026-10-28: 1,631 fast loop, 1,772 EditMode, 340 PlayMode (the last four fixed and rerun).
+- [ ] 4. HUD.
+- [ ] 5. Menus and modal screens (inventory, character, journal, dialogue, vendor, breach, scanner).
+- [ ] 6. Guns and impacts.
+- [ ] 7. Integration and Gate C.
+
 # Milestone 2 — task checklist
 
 Plan: `implementation_plan_m2.md` (approved 2026-10-20). Milestone 2 is complete: Gate A passed 2026-10-22. Milestone 3 (steps 9-13) is complete: Gate B passed 2026-10-23 at Medium (a partial measurement, see step 13).

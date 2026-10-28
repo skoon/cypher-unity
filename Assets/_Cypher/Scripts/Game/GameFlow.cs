@@ -8,6 +8,15 @@ using UnityEngine;
 
 namespace Cypher.Game
 {
+    /// <summary>What keeps the saved game: whether there is one to continue, and saving now. The RPG service is one; without one there is nothing to continue.</summary>
+    public interface ISaveGameHost
+    {
+        bool HasSave { get; }
+
+        /// <summary>Save now; null when it worked, otherwise why not (for the player).</summary>
+        string SaveNow();
+    }
+
     /// <summary>
     /// The game's top-level flow in one scene: loading, the title over the live city, playing, pausing, back to the title.
     /// <see cref="GameFlowMachine"/> decides which command does what, <see cref="FlowPolicy"/> says what each state means, and this
@@ -59,6 +68,12 @@ namespace Cypher.Game
         public LoadTracker Loading => _tracker;
 
         public event Action<FlowTransition> StateChanged;
+
+        /// <summary>Who keeps the saved game; set by the RPG service. Null means there is no saving and nothing to continue.</summary>
+        public ISaveGameHost SaveHost { get; set; }
+
+        /// <summary>Whether Continue would do anything: on the title, with a saved game.</summary>
+        public bool CanContinue => State == FlowState.Title && SaveHost != null && SaveHost.HasSave;
 
         /// <summary>What Quit does; tests replace it. The default ends the game, or leaves Play mode in the Editor.</summary>
         public Action QuitAction { get; set; } = DefaultQuit;
@@ -128,6 +143,17 @@ namespace Cypher.Game
 
         // Each returns whether the command meant anything right now.
         public bool NewGame() => _machine.TryHandle(FlowCommand.NewGame);
+
+        /// <summary>Carry on the saved game: the world is set up as for a new game, then the save host puts the game back. False when there is no save.</summary>
+        public bool Continue() => CanContinue && _machine.TryHandle(FlowCommand.Continue);
+
+        /// <summary>Save while paused (or playing); null when it worked, otherwise why not.</summary>
+        public string SaveGame()
+        {
+            if (State != FlowState.Paused && State != FlowState.Playing) return "There is no game to save.";
+            if (SaveHost == null) return "Saving is not available.";
+            return SaveHost.SaveNow();
+        }
         public bool Pause() => _machine.TryHandle(FlowCommand.Pause);
         public bool Resume() => _machine.TryHandle(FlowCommand.Resume);
         public bool TogglePause() => _machine.TryHandle(FlowCommand.TogglePause);

@@ -10,7 +10,7 @@ namespace Cypher.Tests
         const string W = "<Keyboard>/w";
         const string A = "<Keyboard>/a";
         const string Space = "<Keyboard>/space";
-        const string J = "<Keyboard>/j";
+        const string K = "<Keyboard>/k";
         const string LeftShift = "<Keyboard>/leftShift";
         const string RightShift = "<Keyboard>/rightShift";
         const string LeftCtrl = "<Keyboard>/leftCtrl";
@@ -39,9 +39,9 @@ namespace Cypher.Tests
         public void AFreeControlIsApplied()
         {
             BindingMap m = Fresh();
-            AssignResult r = m.Assign(GameAction.Jump, BindingSlot.Primary, J);
+            AssignResult r = m.Assign(GameAction.Jump, BindingSlot.Primary, K);
             Assert.AreEqual(AssignOutcome.Applied, r.Outcome);
-            Assert.AreEqual(J, m.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual(K, m.Get(GameAction.Jump, BindingSlot.Primary));
             Assert.IsFalse(m.IsDefault(GameAction.Jump, BindingSlot.Primary));
             Assert.IsNull(m.Validate());
         }
@@ -50,8 +50,8 @@ namespace Cypher.Tests
         public void AFreeControlCanFillAnEmptySlot()
         {
             BindingMap m = Fresh();
-            Assert.AreEqual(AssignOutcome.Applied, m.Assign(GameAction.Jump, BindingSlot.Secondary, "<Mouse>/rightButton").Outcome);
-            Assert.AreEqual("<Mouse>/rightButton", m.Get(GameAction.Jump, BindingSlot.Secondary));
+            Assert.AreEqual(AssignOutcome.Applied, m.Assign(GameAction.Jump, BindingSlot.Secondary, "<Mouse>/backButton").Outcome);
+            Assert.AreEqual("<Mouse>/backButton", m.Get(GameAction.Jump, BindingSlot.Secondary));
         }
 
         [Test]
@@ -101,7 +101,7 @@ namespace Cypher.Tests
             // The gamepad pool is separate, so the same gamepad button on two actions is a conflict only among gamepad slots.
             BindingMap m = Fresh();
             Assert.AreEqual(AssignOutcome.Conflict, m.Assign(GameAction.Sprint, BindingSlot.Gamepad, "<Gamepad>/buttonSouth").Outcome);
-            Assert.AreEqual(AssignOutcome.Applied, m.Assign(GameAction.Sprint, BindingSlot.Gamepad, "<Gamepad>/buttonNorth").Outcome);
+            Assert.AreEqual(AssignOutcome.Applied, m.Assign(GameAction.Sprint, BindingSlot.Gamepad, "<Gamepad>/rightStickPress").Outcome);
         }
 
         [Test]
@@ -182,8 +182,8 @@ namespace Cypher.Tests
         public void SwapWithOnAFreeControlJustAssigns()
         {
             BindingMap m = Fresh();
-            Assert.AreEqual(AssignOutcome.Applied, m.SwapWith(GameAction.Jump, BindingSlot.Primary, J).Outcome);
-            Assert.AreEqual(J, m.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual(AssignOutcome.Applied, m.SwapWith(GameAction.Jump, BindingSlot.Primary, K).Outcome);
+            Assert.AreEqual(K, m.Get(GameAction.Jump, BindingSlot.Primary));
         }
 
         [Test]
@@ -257,7 +257,7 @@ namespace Cypher.Tests
         public void ResettingAnActionRestoresItsDefaults()
         {
             BindingMap m = Fresh();
-            m.Assign(GameAction.Jump, BindingSlot.Primary, J);
+            m.Assign(GameAction.Jump, BindingSlot.Primary, K);
             m.Assign(GameAction.Jump, BindingSlot.Secondary, "<Mouse>/middleButton");
             m.Assign(GameAction.Jump, BindingSlot.Gamepad, "<Gamepad>/buttonNorth");
 
@@ -320,15 +320,15 @@ namespace Cypher.Tests
         public void OnlyDifferencesFromTheDefaultsAreStoredWithStableKeys()
         {
             BindingMap m = Fresh();
-            m.Assign(GameAction.Jump, BindingSlot.Primary, J);
+            m.Assign(GameAction.Jump, BindingSlot.Primary, K);
             m.Unbind(GameAction.Sprint, BindingSlot.Secondary);
-            m.Assign(GameAction.Crouch, BindingSlot.Gamepad, "<Gamepad>/rightShoulder");
+            m.Assign(GameAction.Crouch, BindingSlot.Gamepad, "<Gamepad>/rightStickPress");
 
             IReadOnlyDictionary<string, string> o = m.ToOverrides();
             Assert.AreEqual(3, o.Count);
-            Assert.AreEqual(J, o["jump:0"]);
+            Assert.AreEqual(K, o["jump:0"]);
             Assert.AreEqual("none", o["sprint:1"]);
-            Assert.AreEqual("<Gamepad>/rightShoulder", o["crouch:2"]);
+            Assert.AreEqual("<Gamepad>/rightStickPress", o["crouch:2"]);
             CollectionAssert.AreEqual(new[] { "crouch:2", "jump:0", "sprint:1" }, new List<string>(o.Keys), "in key order, so the file is stable");
         }
 
@@ -414,7 +414,7 @@ namespace Cypher.Tests
         [Test]
         public void NegativeOrJunkSlotNumbersAreNamedNotCrashed()
         {
-            var overrides = new Dictionary<string, string> { ["jump:-1"] = J, ["jump:x"] = J, ["jump:"] = J, [":0"] = J };
+            var overrides = new Dictionary<string, string> { ["jump:-1"] = K, ["jump:x"] = K, ["jump:"] = K, [":0"] = K };
             BindingMap m = BindingMap.FromOverrides(overrides, out IReadOnlyList<string> problems);
             Assert.AreEqual(4, problems.Count);
             Assert.IsTrue(m.SameValues(Fresh()));
@@ -428,7 +428,7 @@ namespace Cypher.Tests
             BindingMap a = Fresh();
             BindingMap b = a.Clone();
             Assert.IsTrue(a.SameValues(b));
-            b.Assign(GameAction.Jump, BindingSlot.Primary, J);
+            b.Assign(GameAction.Jump, BindingSlot.Primary, K);
             Assert.AreEqual(Space, a.Get(GameAction.Jump, BindingSlot.Primary));
             Assert.IsFalse(a.SameValues(b));
             Assert.IsFalse(a.SameValues(null));
@@ -444,7 +444,7 @@ namespace Cypher.Tests
             Assert.IsFalse(m.TryFindHolder(BindingSlot.Gamepad, Space, out _, out _));
             Assert.IsTrue(m.TryFindHolder(BindingSlot.Gamepad, "<Gamepad>/buttonEast", out a, out s));
             Assert.AreEqual(GameAction.Crouch, a);
-            Assert.IsFalse(m.TryFindHolder(BindingSlot.Primary, J, out _, out _));
+            Assert.IsFalse(m.TryFindHolder(BindingSlot.Primary, K, out _, out _));
         }
 
         [Test]

@@ -119,6 +119,10 @@ namespace Cypher.EditorTools
             var traffic = trafficGo.AddComponent<TrafficController>();
             traffic.Configure(flow, cityBuilder, playerController, camera.GetComponent<Camera>(), quality.GetComponent<QualityDirector>(), crowd, EnsureTrafficMaterials());
 
+            // The RPG: the character, the jobs, the places and the saved game, from a new game or Continue until the title.
+            var rpgGo = new GameObject("RPG");
+            rpgGo.AddComponent<Cypher.Rpg.RpgService>().Configure(flow, cityBuilder, playerController, settings);
+
             // The sound: the menu sounds from the first screen, the city's bed and the score from a new game, through the generated mixer.
             AudioMixerWriter.Write();
             var audioMixer = AssetDatabase.LoadAssetAtPath<UnityEngine.Audio.AudioMixer>(AudioMixerWriter.Path);

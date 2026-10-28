@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections;
+using System.Linq;
 using Cypher.Core;
 using Cypher.UI;
 using NUnit.Framework;
@@ -112,8 +113,14 @@ namespace Cypher.Tests
         public IEnumerator DownFromTheLastRowReachesTheFooterResetAllButton()
         {
             yield return ToControlsTab();
-            for (int i = 0; i < 6; i++) yield return Nav(MoveDirection.Down);
-            Assert.AreSame(Button(GameAction.Crouch, BindingSlot.Primary), Focused);
+            var visited = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < ControlCatalog.All.Count - 1; i++)
+            {
+                yield return Nav(MoveDirection.Down);
+                ActionInfo row = ControlCatalog.All.FirstOrDefault(a => Focused == Button(a.Action, BindingSlot.Primary));
+                visited.Add(row?.Id ?? (Focused == null ? "nothing" : Focused.GetType().Name));
+            }
+            Assert.AreSame(Button(ControlCatalog.All[ControlCatalog.All.Count - 1].Action, BindingSlot.Primary), Focused, "visited " + string.Join(", ", visited));
             yield return Nav(MoveDirection.Down);
             Assert.AreSame(Options.ResetButton, Focused);
             Assert.AreEqual("RESET ALL CONTROLS", Options.ResetButton.Text);
@@ -150,14 +157,14 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close after the key");
 
-            Assert.AreEqual("<Keyboard>/j", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
-            Assert.AreEqual("J", Button(GameAction.Jump, BindingSlot.Primary).Text);
+            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual("K", Button(GameAction.Jump, BindingSlot.Primary).Text);
             Assert.IsTrue(Button(GameAction.Jump, BindingSlot.Primary).ClassListContains("cy-bind--changed"), "a control the player chose is marked");
             Assert.IsTrue(Options.Controls.ResetButton(GameAction.Jump).enabledSelf);
-            Assert.AreEqual("<Keyboard>/j", StoredOverride("jump:0"), "saved the moment it was made, not on a timer");
+            Assert.AreEqual("<Keyboard>/k", StoredOverride("jump:0"), "saved the moment it was made, not on a timer");
             yield return WaitUntil(() => Focused == Button(GameAction.Jump, BindingSlot.Primary), 2f, "focus should come back to the button that was pressed");
             Assert.IsFalse(Ui.IsCapturing);
         }
@@ -167,7 +174,7 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close after the key");
             Options.BackButton.Activate();
 
@@ -175,7 +182,7 @@ namespace Cypher.Tests
             var player = Object.FindFirstObjectByType<Cypher.Player.FirstPersonController>();
             yield return WaitUntil(() => player.Motor.Grounded, 5f, "the player never landed");
             float before = player.transform.position.y;
-            Input.Hold(Key.J);
+            Input.Hold(Key.K);
             float top = before;
             float until = Time.realtimeSinceStartup + 0.6f;
             while (Time.realtimeSinceStartup < until)
@@ -292,13 +299,13 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Gamepad);
-            Input.PressPad(GamepadButton.North, true);
+            Input.PressPad(GamepadButton.RightStick, true);
             yield return null;
             yield return null;
-            Input.PressPad(GamepadButton.North, false);
+            Input.PressPad(GamepadButton.RightStick, false);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close");
-            Assert.AreEqual("<Gamepad>/buttonNorth", Service.Bindings.Get(GameAction.Jump, BindingSlot.Gamepad));
-            Assert.AreEqual("Y", Button(GameAction.Jump, BindingSlot.Gamepad).Text);
+            Assert.AreEqual("<Gamepad>/rightStickPress", Service.Bindings.Get(GameAction.Jump, BindingSlot.Gamepad));
+            Assert.AreEqual("R3", Button(GameAction.Jump, BindingSlot.Gamepad).Text);
         }
 
         [UnityTest]
@@ -364,7 +371,7 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close");
 
             Options.Controls.ResetButton(GameAction.Jump).Activate();
@@ -379,13 +386,13 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close");
             yield return OpenPrompt(GameAction.Crouch, BindingSlot.Gamepad);
-            Input.PressPad(GamepadButton.RightShoulder, true);
+            Input.PressPad(GamepadButton.RightStick, true);
             yield return null;
             yield return null;
-            Input.PressPad(GamepadButton.RightShoulder, false);
+            Input.PressPad(GamepadButton.RightStick, false);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the second prompt did not close (top " + Ui.Top + ", capturing " + Ui.IsCapturing + ", tab " + Options.ActiveTitle + ")");
 
             Options.ResetButton.Activate();
@@ -400,11 +407,11 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close");
 
             yield return ToControlsTab();   // a fresh load of the scene with the same file
-            Assert.AreEqual("J", Button(GameAction.Jump, BindingSlot.Primary).Text);
+            Assert.AreEqual("K", Button(GameAction.Jump, BindingSlot.Primary).Text);
             Assert.IsTrue(Button(GameAction.Jump, BindingSlot.Primary).ClassListContains("cy-bind--changed"));
         }
 
@@ -413,15 +420,15 @@ namespace Cypher.Tests
         {
             yield return ToControlsTab();
             yield return OpenPrompt(GameAction.Jump, BindingSlot.Primary);
-            yield return PressKeyForPrompt(Key.J);
+            yield return PressKeyForPrompt(Key.K);
             yield return WaitUntil(() => Ui.Top == UiScreen.Options, 3f, "the prompt did not close");
 
             Options.SelectTab(0);
             Options.FocusFirstOfPage();
             yield return Nav(MoveDirection.Right);   // quality up: applies a whole settings copy
-            Assert.AreEqual("<Keyboard>/j", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
             Options.BackButton.Activate();
-            Assert.AreEqual("<Keyboard>/j", StoredOverride("jump:0"));
+            Assert.AreEqual("<Keyboard>/k", StoredOverride("jump:0"));
         }
     }
 }

@@ -23,6 +23,10 @@ namespace Cypher.Core
         Booted,
         LoadingFinished,
         NewGame,
+
+        /// <summary>From the title: carry on the saved game (the game decides whether there is one).</summary>
+        Continue,
+
         Pause,
         Resume,
 
@@ -118,7 +122,7 @@ namespace Cypher.Core
                     return false;
 
                 case FlowState.Title:
-                    if (command == FlowCommand.NewGame) { to = FlowState.Playing; return true; }
+                    if (command == FlowCommand.NewGame || command == FlowCommand.Continue) { to = FlowState.Playing; return true; }
                     break;
 
                 case FlowState.Playing:

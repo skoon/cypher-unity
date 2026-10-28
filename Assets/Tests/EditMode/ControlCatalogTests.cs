@@ -19,7 +19,11 @@ namespace Cypher.Tests
         public void IdsAreUniqueStableCamelCaseNamesThatRoundTrip()
         {
             Assert.AreEqual(ControlCatalog.All.Count, ControlCatalog.All.Select(a => a.Id).Distinct().Count());
-            Assert.AreEqual(new[] { "moveForward", "moveBack", "moveLeft", "moveRight", "jump", "sprint", "crouch" }, ControlCatalog.All.Select(a => a.Id).ToArray());
+            Assert.AreEqual(new[]
+            {
+                "moveForward", "moveBack", "moveLeft", "moveRight", "jump", "sprint", "crouch",
+                "interact", "scan", "inventory", "journal", "fire", "aim", "reload", "weapon1", "weapon2", "weapon3",
+            }, ControlCatalog.All.Select(a => a.Id).ToArray(), "ids are stored in settings files: never renamed, new ones at the end");
             foreach (ActionInfo a in ControlCatalog.All)
             {
                 Assert.IsTrue(ControlCatalog.TryFromId(a.Id, out ActionInfo found));

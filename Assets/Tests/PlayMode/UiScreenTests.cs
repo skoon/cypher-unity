@@ -124,7 +124,9 @@ namespace Cypher.Tests
             Assert.AreEqual(0f, Time.timeScale);
             yield return WaitUntil(() => Focused == Ui.Pause.Resume, 2f, "no focus on the pause screen");
             yield return Nav(MoveDirection.Down);
-            Assert.AreSame(Ui.Pause.Options, Focused, "navigation still works at time scale 0");
+            Assert.AreSame(Ui.Pause.Save, Focused, "navigation still works at time scale 0");
+            yield return Nav(MoveDirection.Down);
+            Assert.AreSame(Ui.Pause.Options, Focused);
             yield return Submit();
             Assert.AreEqual(UiScreen.Options, Ui.Top, "and so does a press");
         }
@@ -163,6 +165,7 @@ namespace Cypher.Tests
             yield return SliceTestScene.LoadAndPlay();
             Flow.Pause();
             yield return WaitUntil(() => Focused == Ui.Pause.Resume, 2f, "no focus on the pause screen");
+            yield return Nav(MoveDirection.Down);
             yield return Nav(MoveDirection.Down);
             yield return Submit();
             Assert.AreEqual(UiScreen.Options, Ui.Top);

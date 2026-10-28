@@ -174,7 +174,31 @@ namespace Cypher.Core
         {
             if (double.IsNaN(d) || double.IsInfinity(d)) throw new ArgumentException("JSON cannot hold NaN or Infinity");
             if (d == Math.Floor(d) && Math.Abs(d) < 1e15) sb.Append(((long)d).ToString(CultureInfo.InvariantCulture));
-            else sb.Append(d.ToString("R", CultureInfo.InvariantCulture));
+            else sb.Append(Shortest(d));
+        }
+
+        /// <summary>
+        /// The fewest significant digits that read back as the same double, as JavaScript writes numbers. ("R" is not that on every runtime: Unity's Mono gives
+        /// more digits for some values, so the same data would write differently there.)
+        /// </summary>
+        static string Shortest(double d)
+        {
+            string s = d.ToString("R", CultureInfo.InvariantCulture);
+            for (int digits = 15; digits <= 17; digits++)
+            {
+                string g = d.ToString("G" + digits, CultureInfo.InvariantCulture);
+                if (double.Parse(g, NumberStyles.Float, CultureInfo.InvariantCulture) == d)
+                {
+                    s = g;
+                    break;
+                }
+            }
+            int e = s.IndexOf('E');
+            if (e < 0) return s;
+            // 1E-07 → 1e-7, 1.5E+21 → 1.5e+21
+            string exponent = s.Substring(e + 1);
+            char sign = exponent[0] == '-' ? '-' : '+';
+            return s.Substring(0, e) + "e" + sign + exponent.TrimStart('+', '-').TrimStart('0');
         }
 
         static void WriteString(StringBuilder sb, string s)

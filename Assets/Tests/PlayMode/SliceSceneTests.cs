@@ -26,6 +26,7 @@ namespace Cypher.Tests
         {
             // Never read or write the player's real settings file, and never inherit switches from the test runner's command line.
             SettingsService.StorageFactory = () => new MemorySettingsStorage();
+            Cypher.Rpg.RpgService.StorageFactory = () => new MemorySaveStorage();
             LaunchOptions.Override = new FlowOptions(noAudio: true);
         }
 
@@ -33,6 +34,7 @@ namespace Cypher.Tests
         public void TearDown()
         {
             SettingsService.StorageFactory = null;
+            Cypher.Rpg.RpgService.StorageFactory = null;
             LaunchOptions.Override = null;
             Time.timeScale = 1f;
         }

@@ -194,12 +194,12 @@ namespace Cypher.Tests
         {
             yield return SliceTestScene.Load();
             Assert.IsFalse(_storage.Exists);
-            Assert.AreEqual(AssignOutcome.Applied, Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/j").Outcome);
+            Assert.AreEqual(AssignOutcome.Applied, Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k").Outcome);
             Assert.IsTrue(_storage.Exists, "a rebind is saved the moment it is made");
             StringAssert.Contains("jump:0", _storage.ReadAll());
 
             yield return SliceTestScene.Load();   // a fresh start of the game, reading the same file
-            Assert.AreEqual("<Keyboard>/j", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
             Assert.AreEqual(SettingsLoadOutcome.Loaded, Service.LoadResult.Outcome);
             Assert.IsNull(Service.Notice);
         }
@@ -220,22 +220,22 @@ namespace Cypher.Tests
         {
             yield return SliceTestScene.Load();
             GameSettings stale = Service.Current;                 // taken before the rebind, as an Options screen would
-            Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/j");
+            Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k");
 
             stale.Graphics.FieldOfView = 95;
             Service.Apply(stale);
 
-            Assert.AreEqual("<Keyboard>/j", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary), "the rebind survives");
+            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary), "the rebind survives");
             Assert.AreEqual(95f, Camera.main.fieldOfView, 1e-4f, "while the rest of the copy applied");
-            Assert.AreEqual("<Keyboard>/j", Service.Current.Controls.Overrides["jump:0"]);
+            Assert.AreEqual("<Keyboard>/k", Service.Current.Controls.Overrides["jump:0"]);
             Service.Save();
-            Assert.AreEqual("<Keyboard>/j", new SettingsStore(_storage).Load().Settings.Controls.Overrides["jump:0"]);
+            Assert.AreEqual("<Keyboard>/k", new SettingsStore(_storage).Load().Settings.Controls.Overrides["jump:0"]);
         }
 
         [UnityTest]
         public IEnumerator ControlsInAFileThatMakeNoSenseAreResetAndTheNoticeNamesThem()
         {
-            _storage.WriteAll("{\"version\":1,\"controls\":{\"overrides\":{\"jump:9\":\"<Keyboard>/j\",\"crouch:1\":\"<Gamepad>/buttonNorth\",\"sprint:1\":\"<Mouse>/middleButton\"}}}");
+            _storage.WriteAll("{\"version\":1,\"controls\":{\"overrides\":{\"jump:9\":\"<Keyboard>/k\",\"crouch:1\":\"<Gamepad>/buttonNorth\",\"sprint:1\":\"<Mouse>/middleButton\"}}}");
             yield return SliceTestScene.Load();
 
             StringAssert.Contains("could not be used and were reset", Service.Notice);
@@ -260,7 +260,7 @@ namespace Cypher.Tests
         public IEnumerator ThePlayerWalksOnTheKeysTheFileSays()
         {
             var changed = new GameSettings();
-            changed.Controls.SetOverride("moveForward:0", "<Keyboard>/i");
+            changed.Controls.SetOverride("moveForward:0", "<Keyboard>/o");
             changed.Controls.SetOverride("moveForward:1", ControlCatalog.Unbound);   // no arrow key either
             _storage.WriteAll(Json_(changed));
             using (var input = new VirtualInput())
@@ -277,11 +277,11 @@ namespace Cypher.Tests
                 yield return null;
                 Assert.AreEqual(z0, Player.transform.position.z, 0.1f, "W no longer walks forward");
 
-                input.Hold(UnityEngine.InputSystem.Key.I);
+                input.Hold(UnityEngine.InputSystem.Key.O);
                 until = Time.realtimeSinceStartup + 0.6f;
                 while (Time.realtimeSinceStartup < until) yield return null;
                 input.ReleaseAll();
-                Assert.Greater(Player.transform.position.z, z0 + 0.5f, "I does");
+                Assert.Greater(Player.transform.position.z, z0 + 0.5f, "O does");
             }
         }
 

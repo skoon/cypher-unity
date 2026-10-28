@@ -1,0 +1,19 @@
+{
+    "name": "Cypher.Rpg",
+    "rootNamespace": "Cypher.Rpg",
+    "references": [
+        "Cypher.Core",
+        "Cypher.City",
+        "Cypher.Game",
+        "Cypher.Player"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
