@@ -171,8 +171,30 @@ namespace Cypher.Core
         }
     }
 
+    /// <summary>A screen of the game open over play: none, a menu that stops the world (inventory, character, journal, vendor), or an interaction that only stops the player (a conversation, a breach, whose timer runs).</summary>
+    public enum FlowModal
+    {
+        None,
+        Menu,
+        Interaction,
+    }
+
     public static class FlowPolicy
     {
+        /// <summary>The rules of a state with a game screen open. A modal only means anything while playing; elsewhere it is ignored.</summary>
+        public static FlowRules For(FlowState state, FlowModal modal)
+        {
+            FlowRules rules = For(state);
+            if (state != FlowState.Playing) return rules;
+            switch (modal)
+            {
+                case FlowModal.None: return rules;
+                case FlowModal.Menu: return new FlowRules(playerActive: false, cursorLocked: false, titleCameraActive: false, adaptiveQualityActive: false, timeScale: 0);
+                case FlowModal.Interaction: return new FlowRules(playerActive: false, cursorLocked: false, titleCameraActive: false, adaptiveQualityActive: false, timeScale: 1);
+                default: throw new ArgumentOutOfRangeException(nameof(modal), modal, "unknown modal");
+            }
+        }
+
         public static FlowRules For(FlowState state)
         {
             switch (state)

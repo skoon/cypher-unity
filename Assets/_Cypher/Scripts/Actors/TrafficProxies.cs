@@ -1,4 +1,5 @@
 using System;
+using Cypher.City;
 using Cypher.Core;
 using UnityEngine;
 
@@ -29,6 +30,7 @@ namespace Cypher.Actors
                 var body = go.AddComponent<Rigidbody>();
                 body.isKinematic = true;
                 body.useGravity = false;
+                go.AddComponent<ShotSurface>().Target = ShotTarget.Vehicle;   // a shot that hits it is marked as a hit on a vehicle
                 _boxes[i] = go.AddComponent<BoxCollider>();
                 _objects[i] = go;
                 _bodies[i] = body;

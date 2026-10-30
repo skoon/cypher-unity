@@ -38,6 +38,8 @@ namespace Cypher.Audio
         [SerializeField] CrowdController _crowd;
         [SerializeField] TrafficController _traffic;
         [SerializeField] RainController _rain;
+        [SerializeField] Cypher.Combat.WeaponSystem guns;
+        GunAudio _gunAudio;
 
         AudioNoiseBank _noise;
         AudioClipBank _clips;
@@ -153,6 +155,11 @@ namespace Cypher.Audio
 
         public int SampleRate { get; private set; }
 
+        /// <summary>The guns, whose shots, impacts and mechanics this plays; optional (a scene without guns has none).</summary>
+        public void ConfigureGuns(Cypher.Combat.WeaponSystem weaponSystem) => guns = weaponSystem;
+
+        public GunAudio Guns => _gunAudio;
+
         public void Configure(UnityEngine.Audio.AudioMixer audioMixer, GameFlow gameFlow, SettingsService settingsService, FirstPersonController firstPerson, Transform listenerTransform,
             CityBuilder cityBuilder, CrowdController crowdController, TrafficController trafficController, RainController rainController)
         {
@@ -188,6 +195,7 @@ namespace Cypher.Audio
             _clips.Enqueue(ClipPlan.Ui());
             _clips.Enqueue(ClipPlan.Foley());
             _clips.Enqueue(ClipPlan.Ambient());
+            _clips.Enqueue(ClipPlan.Weapons());
 
             var voices = new GameObject("Voices");
             voices.transform.SetParent(transform, false);
@@ -198,6 +206,7 @@ namespace Cypher.Audio
             _environment = new AudioEnvironment();
 
             _flow.StateChanged += OnFlowChanged;
+            if (guns != null) _gunAudio = new GunAudio(this, guns);
             if (_settings != null)
             {
                 _settings.Applied += OnSettings;
@@ -214,6 +223,7 @@ namespace Cypher.Audio
         {
             if (_flow != null) _flow.StateChanged -= OnFlowChanged;
             if (_settings != null) _settings.Applied -= OnSettings;
+            _gunAudio?.Dispose();
             if (UiSound.Sink == (Action<string>)PlayUi) UiSound.Sink = null;
             TearDownWorld();
             _clips?.Dispose();

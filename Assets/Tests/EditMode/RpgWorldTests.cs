@@ -853,6 +853,81 @@ namespace Cypher.Tests
         }
 
         [Test]
+        public void ABreachAJobIsWaitingOnComesBeforeThePlacesConversation()
+        {
+            var core = new Core().C;
+            core.SetCity(FakeCity());
+            RpgLocation datacore = core.GetLocation("datacore");
+            core.SetPlayerPosition(datacore.X, 0, datacore.Z);
+            Assert.AreEqual("dlg_wire", core.GetNearbyInteractable()["id"], "with no job waiting, the core is Wire's");
+
+            if (!core.Quests.IsActive("q_main_ghost")) Assert.IsTrue(core.StartQuest("q_main_ghost").Ok);
+            foreach (string o in new[] { "o_find_kaz", "o_talk_kaz", "o_drop", "o_shard" }) core.CompleteObjective("q_main_ghost", o);
+            Assert.AreEqual("s_datacore", core.Quests.GetState("q_main_ghost").Stage);
+            core.CompleteObjective("q_main_ghost", "o_reach_core");
+
+            JsonObject near = core.GetNearbyInteractable();
+            Assert.AreEqual("breach", near["kind"], "the job's breach is offered at the core");
+            Assert.AreEqual("datacore", near["id"]);
+            Assert.AreEqual(("breach", (string)near["prompt"]), core.InteractionAt("datacore"), "the scanner says the same");
+            Assert.IsTrue(core.Interact().Ok);
+            Assert.AreEqual("datacore", core.Breach.S.TargetId);
+
+            foreach (GridCell p in core.Breach.S.SolutionPath.ToList())
+            {
+                if (core.Breach.Done) break;
+                core.BreachSelect(p.R, p.C);
+            }
+            Assert.AreEqual("s_wire", core.Quests.GetState("q_main_ghost").Stage);
+            Assert.AreEqual("dlg_wire", core.GetNearbyInteractable()["id"], "once breached, Wire answers");
+        }
+
+        [Test]
+        public void TheViewsForTheScreensAreBuiltOnceAndRebuiltAfterAnyChange()
+        {
+            var core = new Core().C;
+            core.SetCity(FakeCity());
+            if (!core.Quests.IsActive("q_main_ghost")) Assert.IsTrue(core.StartQuest("q_main_ghost").Ok);
+            IReadOnlyList<JsonObject> markers = core.JobMarkers;
+            JsonObject tracked = core.TrackedJob;
+            Assert.AreSame(markers, core.JobMarkers, "asked again with nothing changed, the same list");
+            Assert.AreSame(tracked, core.TrackedJob);
+            CollectionAssert.AreEqual(core.Quests.Markers().Select(m => Json.Write(m)), markers.Select(m => Json.Write(m)), "the same markers the quest log gives");
+            Assert.AreEqual(Json.Write(core.Quests.Snapshot("q_main_ghost")), Json.Write(tracked));
+
+            core.Quests.CompleteObjective("q_main_ghost", "o_find_kaz", silent: true);   // a change with no event
+            Assert.AreNotSame(markers, core.JobMarkers, "a change to the jobs rebuilds them");
+            Assert.AreNotSame(tracked, core.TrackedJob);
+            Assert.IsTrue(core.JobMarkers.All(m => (string)m["objectiveId"] != "o_find_kaz"), "the met objective's marker is gone");
+
+            markers = core.JobMarkers;
+            core.SetFlag("anything", true);   // a change elsewhere can show a hidden objective: rebuild too
+            Assert.AreNotSame(markers, core.JobMarkers);
+
+            core.SetPlayerPosition(1, 0, 1);
+            markers = core.JobMarkers;
+            core.SetPlayerPosition(2, 0, 2);
+            Assert.AreSame(markers, core.JobMarkers, "moving changes nothing the views hold");
+        }
+
+        [Test]
+        public void NearbyActionIsWhatGetNearbyInteractableSays()
+        {
+            var core = new Core().C;
+            core.SetCity(FakeCity());
+            Assert.IsNull(core.NearbyAction(), "nothing at the origin");
+            foreach (RpgLocation l in core.GetLocationList())
+            {
+                core.SetPlayerPosition(l.X, 0, l.Z);
+                JsonObject near = core.GetNearbyInteractable();
+                var action = core.NearbyAction();
+                Assert.AreEqual(near == null, action == null, l.Key);
+                if (near == null) continue;
+                Assert.AreEqual(((string)near["kind"], (string)near["id"], (string)near["prompt"]), action.Value, l.Key);
+            }
+        }
+
+        [Test]
         public void AKillRoutedThroughTheCorePaysXpAndLoot()
         {
             var core = new Core();

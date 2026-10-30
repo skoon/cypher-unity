@@ -1,0 +1,20 @@
+{
+    "name": "Cypher.Combat",
+    "rootNamespace": "Cypher.Combat",
+    "references": [
+        "Cypher.Core",
+        "Cypher.City",
+        "Cypher.Player",
+        "Cypher.Game",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

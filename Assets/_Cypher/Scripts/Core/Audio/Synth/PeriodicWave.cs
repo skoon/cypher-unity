@@ -14,6 +14,8 @@ namespace Cypher.Core
         Hollow,
         /// <summary>Seven partials with a bell's weights.</summary>
         Bell,
+        /// <summary>Web Audio's built-in square: odd harmonics at 4/(n pi).</summary>
+        Square,
     }
 
     /// <summary>
@@ -85,6 +87,12 @@ namespace Cypher.Core
                 {
                     var c = new double[NativePartials];
                     for (int n = 1; n < c.Length; n++) c[n] = (n % 2 == 1 ? 1 : -1) * 2 / (Math.PI * n);
+                    return c;
+                }
+                case WaveKind.Square:
+                {
+                    var c = new double[NativePartials];
+                    for (int n = 1; n < c.Length; n += 2) c[n] = 4 / (Math.PI * n);
                     return c;
                 }
                 case WaveKind.SoftSaw:

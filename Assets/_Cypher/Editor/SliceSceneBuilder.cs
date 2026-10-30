@@ -36,6 +36,9 @@ namespace Cypher.EditorTools
         public const string VehicleGlowShaderName = "Cypher/VehicleGlow";
         public const string VehicleShadowShaderName = "Cypher/VehicleShadow";
         public const string SignalShaderName = "Cypher/Signal";
+        public const string ViewmodelShaderName = "Cypher/Viewmodel";
+        public const string GunFxAdditiveShaderName = "Cypher/GunFxAdditive";
+        public const string GunFxAlphaShaderName = "Cypher/GunFxAlpha";
 
         public const string SettingsFolder = "Assets/_Cypher/Settings";
         public const string VolumeProfilePath = SettingsFolder + "/NightVolume.asset";
@@ -104,8 +107,14 @@ namespace Cypher.EditorTools
             settings.Configure(quality.GetComponent<QualityDirector>(), camera.GetComponent<Camera>(), rainController, overlay, playerController);
             var flow = game.AddComponent<GameFlow>();
             flow.Configure(playerController, camera.transform, spawn.transform, titleCamera, quality.GetComponent<QualityDirector>(), cityBuilder, street);
+            // The RPG: the character, the jobs, the places and the saved game, from a new game or Continue until the title.
+            var rpgGo = new GameObject("RPG");
+            var rpg = rpgGo.AddComponent<Cypher.Rpg.RpgService>();
+            rpg.Configure(flow, cityBuilder, playerController, settings);
+            rpgGo.AddComponent<Cypher.Rpg.PlaceMarkers>().Configure(rpg, camera.GetComponent<Camera>(), mats.Neon);   // a neon beacon and name at each place
+
             var uiRoot = game.AddComponent<UiRoot>();
-            uiRoot.Configure(flow, settings);   // loading, title, pause, options, dialogs and the Esc key
+            uiRoot.Configure(flow, settings, rpg, camera.GetComponent<Camera>());   // loading, title, pause, options, dialogs, the Esc key and the HUD
             game.AddComponent<UiShots>().Configure(uiRoot, flow, settings);   // only does anything with --shots DIR
 
             // The people: created round the player when a game starts, gone again at the title.
@@ -118,17 +127,22 @@ namespace Cypher.EditorTools
             var trafficGo = new GameObject("Traffic");
             var traffic = trafficGo.AddComponent<TrafficController>();
             traffic.Configure(flow, cityBuilder, playerController, camera.GetComponent<Camera>(), quality.GetComponent<QualityDirector>(), crowd, EnsureTrafficMaterials());
+            uiRoot.ConfigureScanner(crowd, traffic);   // the scanner tags the people and the vehicles
 
-            // The RPG: the character, the jobs, the places and the saved game, from a new game or Continue until the title.
-            var rpgGo = new GameObject("RPG");
-            rpgGo.AddComponent<Cypher.Rpg.RpgService>().Configure(flow, cityBuilder, playerController, settings);
+            // The guns: out while playing, the effects of their shots, the kick in the view.
+            var gunsGo = new GameObject("Guns");
+            var guns = gunsGo.AddComponent<Cypher.Combat.WeaponSystem>();
+            guns.Configure(flow, playerController, camera.GetComponent<Camera>(), settings, EnsureGunMaterials());
+            uiRoot.ConfigureGuns(guns);   // the weapon panel, the crosshair and the hit marker
 
             // The sound: the menu sounds from the first screen, the city's bed and the score from a new game, through the generated mixer.
             AudioMixerWriter.Write();
             var audioMixer = AssetDatabase.LoadAssetAtPath<UnityEngine.Audio.AudioMixer>(AudioMixerWriter.Path);
             if (audioMixer == null) throw new FileNotFoundException($"The mixer {AudioMixerWriter.Path} did not import.");
             var audioGo = new GameObject("Audio");
-            audioGo.AddComponent<Cypher.Audio.AudioEngine>().Configure(audioMixer, flow, settings, playerController, camera.transform, cityBuilder, crowd, traffic, rainController);
+            var audioEngine = audioGo.AddComponent<Cypher.Audio.AudioEngine>();
+            audioEngine.Configure(audioMixer, flow, settings, playerController, camera.transform, cityBuilder, crowd, traffic, rainController);
+            audioEngine.ConfigureGuns(guns);   // the shots, the impacts, the reloads
 
             EditorSceneManager.MarkSceneDirty(scene);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -187,6 +201,27 @@ namespace Cypher.EditorTools
                     m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
                 }),
                 Lenses = Ensure("CitySignalLenses", Find(SignalShaderName), _ => { }),
+            };
+            AssetDatabase.SaveAssets();
+            return materials;
+        }
+
+        /// <summary>The guns' materials: the viewmodel, the additive and the blended effects, and a vertex-coloured lit one for the debris and the brass.</summary>
+        public static Cypher.Combat.GunMaterials EnsureGunMaterials()
+        {
+            Directory.CreateDirectory(MaterialsFolder);
+            Shader Find(string name)
+            {
+                Shader shader = Shader.Find(name);
+                if (shader == null) throw new FileNotFoundException($"Shader {name} not found; has it been imported?");
+                return shader;
+            }
+            var materials = new Cypher.Combat.GunMaterials
+            {
+                Viewmodel = Ensure("GunViewmodel", Find(ViewmodelShaderName), _ => { }),
+                Additive = Ensure("GunFxAdditive", Find(GunFxAdditiveShaderName), m => m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 20),
+                Alpha = Ensure("GunFxAlpha", Find(GunFxAlphaShaderName), m => m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 10),
+                Lit = Ensure("GunFxLit", Find(ShaderName), m => { m.SetFloat("_Smoothness", 0.2f); m.SetFloat("_Metallic", 0.1f); }),
             };
             AssetDatabase.SaveAssets();
             return materials;

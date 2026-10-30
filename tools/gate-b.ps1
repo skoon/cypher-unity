@@ -4,6 +4,7 @@
 #   powershell -File tools/gate-b.ps1                          (Street route, five tiers, three runs each, 160 s recorded: about an hour; takes over the screen)
 #   powershell -File tools/gate-b.ps1 -Route junction -Repeats 1 -Seconds 90
 #   powershell -File tools/gate-b.ps1 -Tiers Medium,High -Repeats 2
+#   powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Fire          (Gate C: the same with the pilot firing the gun in bursts)
 #   powershell -File tools/gate-b.ps1 -ReportFrom D:\somewhere\gate-b-xyz      (just print the table for runs already made)
 #
 # Before each run it waits until the machine is quiet (CPU under -QuietPercent for -QuietSeconds in a row) and gives up after -QuietTimeoutSeconds rather than measure a busy machine.
@@ -26,6 +27,7 @@ param(
     [string]$OutDir = '',
     [string]$ReportFrom = '',
     [switch]$NoAudio,
+    [switch]$Fire,
     [switch]$AllowStalePlayer
 )
 $ErrorActionPreference = 'Stop'
@@ -114,10 +116,10 @@ if ($newest.LastWriteTime -gt $built -and -not $AllowStalePlayer) {
     throw "The player ($built) is older than $($newest.FullName) ($($newest.LastWriteTime)): run unity-check.ps1 -Step Player first (or pass -AllowStalePlayer)"
 }
 
-if (-not $OutDir) { $OutDir = Join-Path $logs ("gate-b-" + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+if (-not $OutDir) { $OutDir = Join-Path $logs ($(if ($Fire) { 'gate-c-' } else { 'gate-b-' }) + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 if ($Seconds -le 0) { $Seconds = switch ($Route) { 'street' { 160 } 'junction' { 90 } 'city' { 240 } default { 60 } } }
-Write-Host "Gate B: $Route route, $($Tiers -join ', '), $Repeats runs each, $WarmupSeconds s warm-up + $Seconds s recorded; results in $OutDir"
+Write-Host "Gate $(if ($Fire) { 'C' } else { 'B' }): $Route route$(if ($Fire) { ', firing' }), $($Tiers -join ', '), $Repeats runs each, $WarmupSeconds s warm-up + $Seconds s recorded; results in $OutDir"
 
 function Wait-Quiet {
     $deadline = (Get-Date).AddSeconds($QuietTimeoutSeconds)
@@ -140,6 +142,7 @@ for ($r = 1; $r -le $Repeats; $r++) {
         $a = @('-File', $check, '-Step', 'Benchmark', '-Route', $Route, '-Quality', $tier, '-BenchmarkSeconds', $Seconds, '-WarmupSeconds', $WarmupSeconds,
             '-Width', $Width, '-Height', $Height, '-PlayerDir', $PlayerDir, '-BenchmarkDir', $dir)
         if ($NoAudio) { $a += '-NoAudio' }
+        if ($Fire) { $a += '-Fire' }
         & powershell @a | Out-Null
         $log = Join-Path $logs 'player.log'
         if (Test-Path $log) { Copy-Item $log (Join-Path $dir 'player.log') -Force }

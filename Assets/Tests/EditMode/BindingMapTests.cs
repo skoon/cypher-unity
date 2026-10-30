@@ -10,7 +10,7 @@ namespace Cypher.Tests
         const string W = "<Keyboard>/w";
         const string A = "<Keyboard>/a";
         const string Space = "<Keyboard>/space";
-        const string K = "<Keyboard>/k";
+        const string K = "<Keyboard>/y";
         const string LeftShift = "<Keyboard>/leftShift";
         const string RightShift = "<Keyboard>/rightShift";
         const string LeftCtrl = "<Keyboard>/leftCtrl";

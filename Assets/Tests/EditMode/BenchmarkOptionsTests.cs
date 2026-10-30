@@ -147,5 +147,25 @@ namespace Cypher.Tests
             Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route" }));
             Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark-route", "city" }));
         }
+
+        [Test]
+        public void ThePilotFiresOnlyWhenAsked()
+        {
+            Assert.IsFalse(BenchmarkOptions.Parse(new[] { "--benchmark" }).Fire);
+            Assert.IsTrue(BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "street", "--benchmark-fire" }).Fire);
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark-fire" }), "firing needs the benchmark");
+        }
+
+        [Test]
+        public void TheTriggerIsHeldForThreeSecondsOfEveryTen()
+        {
+            Assert.IsTrue(BenchmarkFire.Holding(0));
+            Assert.IsTrue(BenchmarkFire.Holding(2.99));
+            Assert.IsFalse(BenchmarkFire.Holding(3.0));
+            Assert.IsFalse(BenchmarkFire.Holding(9.99));
+            Assert.IsTrue(BenchmarkFire.Holding(10.0));
+            Assert.IsTrue(BenchmarkFire.Holding(152.5));
+            Assert.IsFalse(BenchmarkFire.Holding(-1));
+        }
     }
 }

@@ -323,6 +323,50 @@ powershell -File tools/gate-b.ps1 -Route junction -Repeats 1 -Seconds 90 (the st
 powershell -File tools/gate-b.ps1 -ReportFrom <a results folder>        (print the table for runs already made)
 ```
 
+## Gate C (Milestone 4, step 7, 2026-10-29)
+
+**Gate C: Gate B's run with the game on top (the RPG and its HUD, the place markers, a gun drawn) and the pilot firing, p99 at most 33.3 ms. Passed at Medium and Ultra, one run each.** Raw data in
+`benchmarks/gate-c-2026-10-29/`.
+
+**How it was measured.** As Gate B (street route, one 160 s lap after a 10 s warm-up, Development player, 1080p window, 540p internal, adaptive off, vsync off, everything on, CPU 8% and 6% before the runs), plus
+`--benchmark-fire`: the pilot holds the Wasp's trigger for 3 s of every 10 s as it walks, with the reserve kept full, so tracers, holes, sparks, smoke, brass, muzzle lights and the gun's sounds are all in the measurement.
+The last frame shows 08/256 in the magazine: it fired.
+
+| | Medium | Ultra | Gate B (no game, no gun): Medium / Ultra |
+|---|---|---|---|
+| FPS avg / p50 / p95 / **p99** / worst ms | 83.6 / 11.7 / 14.8 / **17.1** / 60.9 | 67.2 / 14.7 / 18.6 / **20.7** / 27.6 | 88.9, p99 15.6 / 73.3, p99 17.9 |
+| Frames over 33.3 ms | 2 | 0 | 0 / 2 |
+| Headroom under the gate (p99) | 49% | 38% | 53% / 46% |
+| CPU / GPU ms avg | 12.0 / 10.6 | 14.9 / 13.6 | 11.3 / 9.8, 13.7 / 12.2 |
+| Draw calls avg / max, triangles avg | 332 / 537, 383 k | 345 / 571, 553 k | 302 / 498, 374 k; 316 / 530, 546 k |
+| Main-thread allocation per frame; frames with a collection | **47 KB avg; 80** | **49 KB avg; 67** | 4.2 KB; 9 / 4.5 KB; 8 |
+
+The game costs about 5 to 6 FPS (1 to 3 ms of p99): 30 more draws, ~0.7 ms more CPU and ~1.2 ms more GPU. The two Medium frames over budget: the first recorded frame (61 ms, no GPU time reported) and one 48 ms frame
+at 110 s with 105 KB allocated and no collection.
+
+**Finding, then fixed: allocation went up tenfold**, 4 KB to 47 KB a frame, so a collection ran about every 2 s instead of every 20 s. None of the hitches lined up with a collection. Measured in the Editor
+by switching each new system off in turn (`AllocationPlayTests`, 43.5 KB a frame with all on): the HUD 26 KB, the place markers 16 KB, RpgService 3 KB, the gun almost nothing. The cause in both big ones was the
+same: every frame they asked the quest log for its markers and the tracked job's snapshot, which it builds afresh as JSON. Fix: the core keeps those views (`RpgCore.JobMarkers`, `TrackedJob`) until a change
+(`RpgCore.Revision`, bumped by every event, and `QuestLog.Revision`, bumped by every change to the jobs, since one change, a silent objective, has no event); `NearbyAction()` answers "what would E do" without
+building the event payload; the HUD writes a label only when what it says changes (`HudModel.DistanceKey` for distances) and keeps its lists; the markers re-tint only when the jobs change. Editor: 3.0 KB a
+frame walking, 5.0 KB firing (budget in `AllocationPlayTests`: 10 KB). Rerun of Gate C in the player (`benchmarks/gate-c-2026-10-29/after-allocation-fix/`):
+
+| | Medium | Ultra |
+|---|---|---|
+| FPS avg / **p99** / worst ms | 86.0 / **16.0** / 24.3 (was 83.6 / 17.1 / 60.9) | 70.4 / **19.4** / 26.7 (was 67.2 / 20.7 / 27.6) |
+| Frames over 33.3 ms | 0 (was 2) | 0 |
+| Allocation per frame; frames with a collection | **9.8 KB; 17** (was 47 KB; 80) | **11.3 KB; 16** (was 49 KB; 67) |
+
+What is left over Gate B's 4 KB is mostly the firing (2 KB in the Editor) and the gun's impacts; not chased further.
+
+**What this does not say.** One run per tier, no repeats; Performance, Low and High not run; the junction route not run; the menus and conversations are not in the measurement (they stop the player, and the
+menu stops time).
+
+```
+powershell -File tools/unity-check.ps1 -Step Player
+powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Repeats 1 -Fire
+```
+
 ## Startup and the flow (Milestone 2, step 3, 2026-10-20)
 
 A normal launch of the Development player on this machine (1280x720 window): the engine is up and Boot ends at 4.4 s, loading

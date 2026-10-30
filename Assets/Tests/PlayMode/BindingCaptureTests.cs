@@ -128,7 +128,7 @@ namespace Cypher.Tests
         public IEnumerator TheGamepadSlotCapturesAGamepadButtonAndIgnoresTheKeyboard()
         {
             Outcome o = Begin(BindingSlot.Gamepad);
-            yield return PressKey(Key.K);
+            yield return PressKey(Key.Y);
             yield return null;
             Assert.IsFalse(o.Done, "a key is not a gamepad button");
 
@@ -219,9 +219,9 @@ namespace Cypher.Tests
             Assert.AreEqual("<Gamepad>/rightShoulder", second.Captured, "the second capture works after the first one finished");
 
             Outcome third = Begin(BindingSlot.Secondary);
-            yield return PressKey(Key.K);
+            yield return PressKey(Key.Y);
             yield return WaitUntilDone(third);
-            Assert.AreEqual("<Keyboard>/k", third.Captured);
+            Assert.AreEqual("<Keyboard>/y", third.Captured);
         }
 
         [UnityTest]
@@ -242,7 +242,7 @@ namespace Cypher.Tests
             var map = BindingMap.Defaults();
 
             Outcome free = Begin(BindingSlot.Primary);
-            yield return PressKey(Key.K);
+            yield return PressKey(Key.Y);
             yield return WaitUntilDone(free);
             Assert.AreEqual(AssignOutcome.Applied, map.Assign(GameAction.Jump, BindingSlot.Primary, free.Captured).Outcome);
 

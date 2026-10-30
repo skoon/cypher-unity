@@ -297,3 +297,420 @@
 }
 
 .cy-toast .cy-text { font-size: 19px; white-space: normal; }
+
+/* ------------------------------------------------------------------ HUD (after the prototype's ui/HUD.js) */
+
+.cy-hud-panel {
+    position: absolute;
+    background-color: rgba(7, 12, 21, 0.72);
+    border-left-width: 3px;
+    border-left-color: var(--edge);
+    padding: 10px 14px;
+}
+
+.cy-hud-head { flex-direction: row; justify-content: space-between; margin-bottom: 6px; }
+.cy-hud-tag { font-size: 14px; color: var(--cyan); letter-spacing: 3px; }
+.cy-hud-sub { font-size: 13px; color: var(--ice-faint); letter-spacing: 2px; }
+
+/* the biomonitor, bottom left */
+.cy-bio { left: 36px; bottom: 36px; width: 400px; }
+.cy-bio__row { flex-direction: row; align-items: center; margin-top: 5px; }
+.cy-bio__lab { width: 54px; font-size: 15px; color: var(--ice-dim); letter-spacing: 2px; }
+.cy-bio__bar { flex-grow: 1; height: 12px; background-color: rgba(160, 200, 216, 0.12); }
+.cy-bio__fill, .cy-bio__ghost { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; }
+.cy-bar--hp .cy-bio__fill { background-color: var(--cyan); }
+.cy-bar--hp .cy-bio__ghost { background-color: rgba(255, 53, 70, 0.75); }
+.cy-bar--st .cy-bio__fill { background-color: var(--lime); }
+.cy-bar--xp { height: 6px; }
+.cy-bar--xp .cy-bio__fill { background-color: var(--amber); }
+.cy-bio--low .cy-bar--hp .cy-bio__fill { background-color: var(--red); }
+.cy-bio__num { width: 96px; font-size: 15px; -unity-text-align: middle-right; color: var(--ice); }
+.cy-bio__money { width: 150px; color: var(--amber); }
+.cy-bio__lv { color: var(--amber); }
+.cy-bio__chips { flex-grow: 1; flex-direction: row; height: 12px; }
+.cy-bio__chip { flex-grow: 1; margin-right: 3px; background-color: rgba(47, 243, 255, 0.12); border-width: 1px; border-color: rgba(47, 243, 255, 0.3); }
+.cy-bio__chip--on { background-color: var(--cyan); }
+
+/* the job tracker, top left */
+.cy-tracker { left: 36px; top: 120px; width: 460px; border-left-color: var(--amber); }
+.cy-tracker .cy-hud-tag { color: var(--amber); }
+.cy-tracker__title { font-size: 22px; color: var(--ice); white-space: normal; margin-bottom: 6px; }
+.cy-tracker__step { flex-direction: row; align-items: center; margin-top: 4px; }
+.cy-tracker__box { width: 9px; height: 9px; margin-right: 10px; border-width: 1px; border-color: var(--ice-faint); }
+.cy-tracker__step--active .cy-tracker__box { background-color: var(--amber); border-color: var(--amber); }
+.cy-tracker__text { flex-grow: 1; flex-shrink: 1; font-size: 16px; color: var(--ice-dim); white-space: normal; }
+.cy-tracker__step--active .cy-tracker__text { color: var(--ice); }
+.cy-tracker__step--optional .cy-tracker__text { -unity-font-style: italic; color: var(--ice-faint); }
+.cy-tracker__dist { font-size: 15px; color: var(--amber); margin-left: 10px; }
+
+/* the compass, top centre */
+.cy-compass { position: absolute; top: 28px; left: 0; right: 0; align-items: center; }
+.cy-compass__ribbon { width: 600px; height: 40px; border-bottom-width: 1px; border-bottom-color: var(--edge); background-color: rgba(7, 12, 21, 0.45); overflow: hidden; }
+.cy-compass__label { position: absolute; top: 2px; width: 28px; font-size: 14px; -unity-text-align: upper-center; color: var(--ice-dim); }
+.cy-compass__label--north { color: var(--magenta); }
+.cy-compass__bearing { margin-top: 4px; font-size: 15px; color: var(--cyan); letter-spacing: 2px; }
+
+/* the minimap, top right */
+.cy-minimap { right: 36px; top: 36px; width: 260px; padding: 6px; border-left-width: 0; border-width: 1px; border-color: var(--edge); }
+.cy-minimap__map { width: 248px; height: 248px; overflow: hidden; }
+.cy-minimap__player { position: absolute; left: 118px; top: 116px; width: 12px; height: 16px; border-bottom-width: 4px; border-bottom-color: var(--ice); background-color: var(--cyan); rotate: 0deg; }
+.cy-minimap__foot { font-size: 13px; color: var(--ice-dim); letter-spacing: 1px; margin-top: 4px; -unity-text-align: middle-center; }
+
+/* notices, right, beneath the minimap */
+.cy-hud-toasts { position: absolute; right: 36px; top: 340px; width: 420px; align-items: flex-end; }
+.cy-hud-toast { background-color: rgba(7, 12, 21, 0.8); border-right-width: 3px; border-right-color: var(--cyan); padding: 6px 12px; margin-bottom: 6px; align-items: flex-end; }
+.cy-hud-toast__text { font-size: 17px; color: var(--ice); }
+.cy-hud-toast__sub { font-size: 12px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-hud-toast--cred { border-right-color: var(--amber); }
+.cy-hud-toast--cred .cy-hud-toast__text { color: var(--amber); }
+.cy-hud-toast--xp, .cy-hud-toast--level { border-right-color: var(--lime); }
+.cy-hud-toast--level .cy-hud-toast__text { color: var(--lime); }
+.cy-hud-toast--quest { border-right-color: var(--amber); }
+.cy-hud-toast--hack, .cy-hud-toast--item { border-right-color: var(--magenta); }
+.cy-hud-toast--warn, .cy-hud-toast--error { border-right-color: var(--red); }
+
+/* the waypoint */
+.cy-waypoint { position: absolute; width: 80px; align-items: center; }
+.cy-waypoint__mark { width: 16px; height: 16px; rotate: 45deg; border-width: 3px; border-color: var(--amber); background-color: rgba(255, 176, 58, 0.25); }
+.cy-waypoint__dist { margin-top: 6px; font-size: 14px; color: var(--amber); letter-spacing: 1px; }
+.cy-waypoint--edge { opacity: 0.75; }
+
+/* the interact prompt, below centre */
+.cy-hud-prompt { position: absolute; left: 0; right: 0; top: 620px; -unity-text-align: middle-center; font-size: 20px; color: var(--ice); letter-spacing: 3px; }
+
+/* the crosshair */
+.cy-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.cy-crosshair__dot { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; background-color: var(--cyan); }
+.cy-crosshair__t, .cy-crosshair__b { position: absolute; left: -1px; width: 2px; height: 8px; background-color: rgba(47, 243, 255, 0.7); }
+.cy-crosshair__t { top: -16px; }
+.cy-crosshair__b { top: 8px; }
+.cy-crosshair__l, .cy-crosshair__r { position: absolute; top: -1px; width: 8px; height: 2px; background-color: rgba(47, 243, 255, 0.7); }
+.cy-crosshair__l { left: -16px; }
+.cy-crosshair__r { left: 8px; }
+
+/* hurt */
+.cy-hud-damage { position: absolute; left: 0; top: 0; right: 0; bottom: 0; opacity: 0; border-width: 60px; border-color: rgba(255, 53, 70, 0.35); }
+
+/* ------------------------------------------------------------------ conversation (after the prototype's ui/Dialogue.js) */
+
+.cy-talk { justify-content: flex-end; align-items: center; background-color: rgba(2, 4, 8, 0.35); }
+.cy-talk__panel { flex-direction: row; width: 1240px; margin-bottom: 70px; padding: 22px; background-color: var(--panel); border-left-width: 3px; border-left-color: var(--magenta); border-top-width: 1px; border-top-color: var(--edge); }
+.cy-talk__portrait { width: 160px; height: 200px; margin-right: 26px; flex-shrink: 0; }
+.cy-talk__right { flex-grow: 1; flex-shrink: 1; }
+.cy-talk__plate { flex-direction: row; align-items: flex-end; margin-bottom: 10px; }
+.cy-talk__speaker { font-size: 30px; color: var(--cyan); margin-right: 18px; }
+.cy-talk__title { font-size: 15px; color: var(--ice-faint); letter-spacing: 3px; margin-bottom: 4px; }
+.cy-talk__text { font-size: 22px; color: var(--ice); white-space: normal; min-height: 90px; margin-bottom: 14px; }
+.cy-talk__choices { }
+.cy-talk__foot { flex-direction: row; justify-content: flex-end; margin-top: 10px; }
+.cy-talk__hint { font-size: 13px; color: var(--ice-faint); letter-spacing: 2px; }
+
+.cy-choice { flex-direction: row; align-items: center; padding: 7px 12px; margin-bottom: 4px; border-left-width: 3px; border-left-color: rgba(0, 0, 0, 0); background-color: rgba(47, 243, 255, 0.04); }
+.cy-choice:hover, .cy-choice:focus { background-color: var(--cyan-soft); border-left-color: var(--cyan); }
+.cy-choice__n { width: 30px; font-size: 18px; color: var(--cyan); }
+.cy-choice__body { flex-grow: 1; flex-shrink: 1; }
+.cy-choice__text { font-size: 19px; color: var(--ice); white-space: normal; }
+.cy-choice__gate { flex-direction: row; margin-bottom: 2px; }
+.cy-choice__check { font-size: 13px; color: var(--amber); letter-spacing: 2px; margin-right: 10px; }
+.cy-choice__verdict { font-size: 13px; color: var(--lime); letter-spacing: 2px; }
+.cy-choice--locked .cy-choice__text { color: var(--ice-faint); }
+.cy-choice--locked .cy-choice__verdict { color: var(--red); }
+.cy-choice--locked .cy-choice__n { color: var(--ice-faint); }
+.cy-choice--exit .cy-choice__text { color: var(--ice-dim); }
+
+/* ------------------------------------------------------------------ breach (after the prototype's ui/Breach.js) */
+
+.cy-breach { justify-content: center; align-items: center; }
+.cy-breach__panel { width: 1180px; padding: 24px 28px; background-color: var(--panel); border-width: 1px; border-color: var(--edge); border-left-width: 3px; border-left-color: var(--lime); }
+.cy-breach__head { flex-direction: row; align-items: flex-end; margin-bottom: 14px; }
+.cy-breach__title { font-size: 30px; color: var(--lime); margin-right: 16px; }
+.cy-breach__target { flex-grow: 1; font-size: 16px; color: var(--ice-dim); letter-spacing: 2px; margin-bottom: 4px; }
+.cy-breach__esc { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; margin-bottom: 4px; }
+.cy-breach__timer { flex-direction: row; align-items: center; margin-bottom: 18px; }
+.cy-breach__timebar { flex-grow: 1; height: 8px; margin: 0 14px; background-color: rgba(168, 255, 62, 0.12); }
+.cy-breach__timefill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background-color: var(--lime); }
+.cy-breach--urgent .cy-breach__timefill { background-color: var(--red); }
+.cy-breach--urgent .cy-breach__timenum { color: var(--red); }
+.cy-breach__timenum { width: 80px; font-size: 22px; color: var(--lime); -unity-text-align: middle-right; }
+.cy-breach__sub { font-size: 14px; color: var(--ice-faint); letter-spacing: 3px; margin-bottom: 8px; }
+.cy-breach__body { flex-direction: row; }
+.cy-breach__left { margin-right: 36px; }
+.cy-breach__right { flex-grow: 1; flex-shrink: 1; }
+.cy-breach__buffer { flex-direction: row; margin-bottom: 18px; }
+.cy-breach__slot { width: 46px; height: 40px; margin-right: 6px; border-width: 1px; border-color: rgba(168, 255, 62, 0.3); align-items: center; justify-content: center; }
+.cy-breach__slot--filled { background-color: rgba(168, 255, 62, 0.12); border-color: var(--lime); }
+.cy-breach__slot--next { border-color: var(--ice); }
+.cy-breach__slotcode { font-size: 18px; color: var(--lime); }
+.cy-breach__matrix { padding: 8px; border-width: 1px; border-color: rgba(168, 255, 62, 0.25); }
+.cy-breach__row { flex-direction: row; }
+.cy-cell { width: 66px; height: 54px; margin: 3px; align-items: center; justify-content: center; border-width: 1px; border-color: rgba(0, 0, 0, 0); }
+.cy-cell__code { font-size: 22px; color: var(--ice-dim); }
+.cy-cell--line { background-color: rgba(168, 255, 62, 0.07); }
+.cy-cell--live .cy-cell__code { color: var(--lime); }
+.cy-cell--dim .cy-cell__code { color: rgba(160, 200, 216, 0.28); }
+.cy-cell--spent .cy-cell__code { color: rgba(160, 200, 216, 0.15); }
+.cy-cell--spent { background-color: rgba(0, 0, 0, 0.35); }
+.cy-cell:hover, .cy-cell:focus { border-color: var(--lime); background-color: rgba(168, 255, 62, 0.18); }
+.cy-cell--dim:hover, .cy-cell--dim:focus, .cy-cell--spent:hover, .cy-cell--spent:focus { border-color: rgba(255, 53, 70, 0.6); background-color: rgba(255, 53, 70, 0.08); }
+.cy-daemon { flex-direction: row; align-items: center; padding: 8px 10px; margin-bottom: 6px; background-color: rgba(168, 255, 62, 0.04); border-left-width: 3px; border-left-color: rgba(168, 255, 62, 0.3); }
+.cy-daemon--solved { border-left-color: var(--lime); background-color: rgba(168, 255, 62, 0.14); }
+.cy-daemon--failed { border-left-color: var(--red); opacity: 0.5; }
+.cy-daemon__codes { flex-direction: row; margin-right: 16px; }
+.cy-daemon__code { width: 40px; font-size: 18px; color: var(--ice-dim); -unity-text-align: middle-center; }
+.cy-daemon__code--hot { color: var(--lime); }
+.cy-daemon--solved .cy-daemon__code { color: var(--lime); }
+.cy-daemon__meta { flex-grow: 1; flex-shrink: 1; }
+.cy-daemon__name { font-size: 16px; color: var(--ice); letter-spacing: 2px; }
+.cy-daemon__desc { font-size: 13px; color: var(--ice-faint); white-space: normal; }
+.cy-breach__log { margin-top: 14px; }
+.cy-breach__line { font-size: 14px; color: var(--ice-faint); }
+.cy-breach__line--ok { color: var(--lime); }
+.cy-breach__line--bad { color: var(--red); }
+.cy-breach__outcome { font-size: 28px; color: var(--red); -unity-text-align: middle-center; margin-top: 12px; }
+.cy-breach--won .cy-breach__outcome { color: var(--lime); }
+
+/* ------------------------------------------------------------------ game menu (after the prototype's ui/Menus.js) */
+
+.cy-menu { padding: 50px 70px; }
+.cy-menu__shell { flex-grow: 1; background-color: var(--panel); border-width: 1px; border-color: var(--edge); }
+.cy-menu__top { flex-direction: row; align-items: center; height: 74px; padding: 0 26px; border-bottom-width: 1px; border-bottom-color: var(--line); }
+.cy-menu__logo { flex-direction: row; margin-right: 40px; }
+.cy-menu__logotext { font-size: 30px; color: var(--ice); }
+.cy-menu__tabs { flex-direction: row; flex-grow: 1; height: 100%; }
+.cy-menu__tab { flex-direction: row; align-items: center; padding: 0 22px; border-bottom-width: 3px; border-bottom-color: rgba(0, 0, 0, 0); }
+.cy-menu__tab:hover { background-color: var(--cyan-soft); }
+.cy-menu__tab--on { border-bottom-color: var(--cyan); background-color: var(--cyan-soft); }
+.cy-menu__tablabel { font-size: 22px; color: var(--ice-dim); }
+.cy-menu__tab--on .cy-menu__tablabel { color: var(--ice); }
+.cy-menu__tabkey { font-size: 12px; color: var(--ice-faint); margin-left: 8px; padding: 1px 5px; border-width: 1px; border-color: var(--line); }
+.cy-menu__metas { flex-direction: row; }
+.cy-menu__meta { font-size: 17px; color: var(--ice-dim); margin-left: 24px; letter-spacing: 2px; }
+.cy-menu__money { color: var(--amber); }
+.cy-menu__body { flex-grow: 1; padding: 22px 26px; }
+.cy-menu__foot { flex-direction: row; height: 40px; align-items: center; padding: 0 26px; border-top-width: 1px; border-top-color: var(--line); }
+.cy-menu__hint { font-size: 13px; color: var(--ice-faint); letter-spacing: 2px; margin-right: 30px; }
+.cy-menu__sub { font-size: 13px; color: var(--ice-faint); letter-spacing: 3px; margin-top: 12px; margin-bottom: 6px; }
+.cy-page { flex-direction: row; flex-grow: 1; }
+
+.cy-row { border-left-width: 3px; border-left-color: rgba(0, 0, 0, 0); }
+.cy-row:hover, .cy-row:focus { background-color: var(--cyan-soft); border-left-color: var(--cyan); }
+.cy-row--selected { background-color: rgba(47, 243, 255, 0.07); border-left-color: var(--edge); }
+
+/* inventory */
+.cy-inv__side { width: 280px; margin-right: 24px; }
+.cy-cat { flex-direction: row; justify-content: space-between; padding: 7px 12px; }
+.cy-cat__label { font-size: 16px; color: var(--ice-dim); letter-spacing: 2px; }
+.cy-cat__count { font-size: 16px; color: var(--ice-faint); }
+.cy-row--selected .cy-cat__label { color: var(--ice); }
+.cy-inv__carrybar { height: 8px; background-color: rgba(160, 200, 216, 0.12); }
+.cy-inv__carryfill { position: absolute; left: 0; top: 0; bottom: 0; background-color: var(--cyan); }
+.cy-inv--overweight .cy-inv__carryfill { background-color: var(--red); }
+.cy-inv__carrynum { font-size: 14px; color: var(--ice-dim); margin-top: 4px; }
+.cy-inv__numbers { margin-top: 18px; }
+.cy-inv__number { flex-direction: row; justify-content: space-between; padding: 4px 0; border-bottom-width: 1px; border-bottom-color: var(--line); }
+.cy-inv__numlabel { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-inv__numvalue { font-size: 16px; color: var(--ice); }
+.cy-inv__main { flex-grow: 1; flex-shrink: 1; margin-right: 24px; }
+.cy-inv__scroll { flex-grow: 1; }
+.cy-inv__line { flex-direction: row; }
+.cy-tile { width: 150px; height: 128px; margin: 0 10px 10px 0; padding: 8px; background-color: rgba(160, 200, 216, 0.05); border-width: 1px; border-color: var(--line); border-bottom-width: 3px; justify-content: flex-end; }
+.cy-tile:hover, .cy-tile:focus { background-color: var(--cyan-soft); border-top-color: var(--cyan); border-right-color: var(--cyan); }
+.cy-tile.cy-row--selected { background-color: rgba(47, 243, 255, 0.1); }
+.cy-tile__icon { position: absolute; left: 10px; top: 10px; font-size: 24px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-tile__eq { position: absolute; right: 8px; top: 8px; font-size: 12px; color: var(--ink); background-color: var(--cyan); padding: 1px 5px; }
+.cy-tile__qty { position: absolute; right: 8px; top: 34px; font-size: 14px; color: var(--ice); }
+.cy-tile__name { font-size: 13px; color: var(--ice); white-space: normal; }
+.cy-inv__empty { font-size: 16px; color: var(--ice-faint); margin-top: 20px; }
+.cy-inv__detail { width: 470px; padding-left: 22px; border-left-width: 1px; border-left-color: var(--line); }
+.cy-det__head { flex-direction: row; }
+.cy-det__rarity { font-size: 14px; letter-spacing: 3px; margin-right: 16px; }
+.cy-det__level { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; margin-right: 16px; }
+.cy-det__equipped { font-size: 14px; color: var(--cyan); letter-spacing: 2px; }
+.cy-det__name { font-size: 28px; color: var(--ice); white-space: normal; margin-top: 8px; padding-left: 10px; border-left-width: 3px; }
+.cy-det__kind { font-size: 14px; color: var(--ice-dim); letter-spacing: 3px; margin: 2px 0 10px 13px; }
+.cy-det__stat { flex-direction: row; justify-content: space-between; padding: 3px 0; border-bottom-width: 1px; border-bottom-color: var(--line); }
+.cy-det__statlabel { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-det__statvalue { font-size: 16px; color: var(--ice); }
+.cy-det__better { color: var(--lime); }
+.cy-det__worse { color: var(--red); }
+.cy-det__mod { font-size: 14px; color: var(--magenta); }
+.cy-det__desc { font-size: 15px; color: var(--ice-dim); white-space: normal; margin-top: 12px; }
+.cy-det__foot { flex-direction: row; justify-content: space-between; margin-top: 12px; }
+.cy-det__value { font-size: 16px; color: var(--amber); }
+.cy-det__weight { font-size: 15px; color: var(--ice-faint); }
+.cy-det__actions { margin-top: 16px; }
+
+/* character */
+.cy-ch__side { width: 470px; margin-right: 24px; }
+.cy-ch__card { padding: 12px 16px; background-color: rgba(47, 243, 255, 0.05); border-left-width: 3px; border-left-color: var(--cyan); }
+.cy-ch__level { font-size: 56px; color: var(--cyan); }
+.cy-ch__levellabel { font-size: 13px; color: var(--ice-faint); letter-spacing: 4px; margin-bottom: 8px; }
+.cy-ch__xp { font-size: 14px; color: var(--ice-dim); letter-spacing: 2px; margin-top: 6px; }
+.cy-ch__bar { height: 6px; margin-top: 3px; background-color: rgba(160, 200, 216, 0.12); }
+.cy-ch__fill { position: absolute; left: 0; top: 0; bottom: 0; background-color: var(--amber); }
+.cy-ch__fill--cred { background-color: var(--magenta); }
+.cy-ch__attrline { flex-direction: row; align-items: center; }
+.cy-attr { flex-direction: row; align-items: center; flex-grow: 1; padding: 6px 10px; }
+.cy-attr__label { width: 140px; font-size: 16px; color: var(--ice-dim); letter-spacing: 2px; }
+.cy-attr__pips { flex-direction: row; flex-grow: 1; }
+.cy-pip { width: 8px; height: 12px; margin-right: 2px; }
+.cy-pip--on { background-color: var(--cyan); }
+.cy-pip--off { background-color: rgba(160, 200, 216, 0.14); }
+.cy-pip--big { width: 18px; height: 8px; margin-right: 4px; }
+.cy-attr__value { width: 46px; font-size: 18px; color: var(--ice); -unity-text-align: middle-right; }
+.cy-attr__plus { width: 44px; margin-left: 6px; }
+.cy-attr--chrome { margin-top: 10px; margin-right: 50px; }
+.cy-attr--chrome .cy-attr__label { color: var(--magenta); flex-grow: 1; }
+.cy-ch__main { flex-grow: 1; flex-shrink: 1; margin-right: 24px; }
+.cy-ch__scroll { flex-grow: 1; }
+.cy-ch__tier { font-size: 13px; color: var(--ice-faint); letter-spacing: 3px; margin: 10px 0 4px 0; }
+.cy-ch__empty { font-size: 14px; color: var(--ice-faint); margin: 2px 0 6px 12px; }
+.cy-perk { flex-direction: row; justify-content: space-between; padding: 8px 12px; margin-bottom: 4px; background-color: rgba(160, 200, 216, 0.04); }
+.cy-perk__name { font-size: 17px; color: var(--ice-dim); }
+.cy-perk__rank { font-size: 15px; color: var(--ice-faint); }
+.cy-perk--owned .cy-perk__name { color: var(--cyan); }
+.cy-perk--open .cy-perk__name { color: var(--ice); }
+.cy-perk--open .cy-perk__rank { color: var(--lime); }
+.cy-perk--locked { opacity: 0.6; }
+.cy-ch__detail { width: 470px; padding-left: 22px; border-left-width: 1px; border-left-color: var(--line); }
+.cy-pd__state { font-size: 14px; letter-spacing: 3px; color: var(--ice-faint); }
+.cy-pd__state--available { color: var(--lime); }
+.cy-pd__state--active, .cy-pd__state--maxed { color: var(--cyan); }
+.cy-pd__state--locked { color: var(--red); }
+.cy-pd__name { font-size: 28px; color: var(--ice); white-space: normal; margin-top: 6px; }
+.cy-pd__rank { font-size: 14px; color: var(--ice-dim); letter-spacing: 2px; margin: 4px 0 8px 0; }
+.cy-pd__pips { flex-direction: row; margin-bottom: 10px; }
+.cy-pd__desc { font-size: 16px; color: var(--ice-dim); white-space: normal; margin-bottom: 8px; }
+.cy-pd__req { font-size: 14px; letter-spacing: 1px; }
+.cy-pd__req--met { color: var(--lime); }
+.cy-pd__req--missing { color: var(--red); }
+
+/* journal */
+.cy-journal__side { width: 520px; margin-right: 24px; }
+.cy-journal__scroll { flex-grow: 1; }
+.cy-journal__section { font-size: 13px; color: var(--ice-faint); letter-spacing: 3px; margin: 12px 0 4px 0; }
+.cy-job { padding: 8px 12px; margin-bottom: 4px; background-color: rgba(160, 200, 216, 0.04); }
+.cy-job__head { flex-direction: row; justify-content: space-between; }
+.cy-job__type { font-size: 12px; color: var(--amber); letter-spacing: 2px; }
+.cy-job__level { font-size: 12px; color: var(--ice-faint); }
+.cy-job__title { font-size: 19px; color: var(--ice); white-space: normal; }
+.cy-job__progress { font-size: 13px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-job--tracked { border-left-color: var(--amber); }
+.cy-job--done .cy-job__title { color: var(--ice-dim); }
+.cy-journal__detail { flex-grow: 1; flex-shrink: 1; padding-left: 22px; border-left-width: 1px; border-left-color: var(--line); }
+.cy-journal__empty { font-size: 16px; color: var(--ice-faint); }
+.cy-jd__head { flex-direction: row; }
+.cy-jd__type { font-size: 14px; color: var(--amber); letter-spacing: 3px; margin-right: 18px; }
+.cy-jd__level { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; margin-right: 18px; }
+.cy-jd__status { font-size: 14px; letter-spacing: 3px; margin-right: 18px; color: var(--cyan); }
+.cy-jd__status--complete { color: var(--lime); }
+.cy-jd__status--failed { color: var(--red); }
+.cy-jd__status--available { color: var(--ice-dim); }
+.cy-jd__tracked { font-size: 14px; color: var(--amber); letter-spacing: 3px; }
+.cy-jd__title { font-size: 34px; color: var(--ice); white-space: normal; margin-top: 6px; }
+.cy-jd__client { font-size: 14px; color: var(--ice-faint); letter-spacing: 2px; margin-bottom: 10px; }
+.cy-jd__summary { font-size: 17px; color: var(--ice-dim); white-space: normal; }
+.cy-jd__hint { font-size: 15px; color: var(--amber); letter-spacing: 2px; margin-top: 10px; }
+.cy-jd__stage { font-size: 16px; color: var(--ice-dim); white-space: normal; }
+.cy-jd__step { flex-direction: row; align-items: center; margin-top: 5px; }
+.cy-jd__box { width: 10px; height: 10px; margin-right: 12px; border-width: 1px; border-color: var(--ice-faint); }
+.cy-jd__step--active .cy-jd__box { background-color: var(--amber); border-color: var(--amber); }
+.cy-jd__step--done .cy-jd__box { background-color: var(--lime); border-color: var(--lime); }
+.cy-jd__steptext { flex-grow: 1; flex-shrink: 1; font-size: 17px; color: var(--ice-dim); white-space: normal; }
+.cy-jd__step--active .cy-jd__steptext { color: var(--ice); }
+.cy-jd__step--done .cy-jd__steptext { color: var(--ice-faint); }
+.cy-jd__dist { font-size: 15px; color: var(--amber); margin-left: 12px; }
+.cy-jd__rewards { flex-direction: row; flex-wrap: wrap; }
+.cy-jd__reward { font-size: 15px; color: var(--amber); margin-right: 20px; }
+
+/* ------------------------------------------------------------------ vendor */
+
+.cy-shop { padding: 60px 90px; }
+.cy-shop__panel { flex-grow: 1; padding: 22px 26px 0 26px; background-color: var(--panel); border-width: 1px; border-color: var(--edge); border-left-width: 3px; border-left-color: var(--amber); }
+.cy-shop__head { flex-direction: row; justify-content: space-between; align-items: flex-end; }
+.cy-shop__who { flex-direction: row; align-items: flex-end; }
+.cy-shop__name { font-size: 34px; color: var(--amber); margin-right: 18px; }
+.cy-shop__kind { font-size: 14px; color: var(--ice-faint); letter-spacing: 3px; margin-bottom: 6px; }
+.cy-shop__purse { align-items: flex-end; }
+.cy-shop__money { font-size: 24px; color: var(--amber); }
+.cy-shop__discount { font-size: 13px; color: var(--lime); letter-spacing: 2px; }
+.cy-shop__greeting { font-size: 17px; color: var(--ice-dim); white-space: normal; margin: 8px 0 6px 0; -unity-font-style: italic; }
+.cy-shop__body { flex-direction: row; flex-grow: 1; }
+.cy-shop__col { width: 520px; margin-right: 24px; }
+.cy-shop__scroll { flex-grow: 1; }
+.cy-trade { flex-direction: row; align-items: center; padding: 7px 12px; margin-bottom: 4px; background-color: rgba(160, 200, 216, 0.04); border-right-width: 3px; }
+.cy-trade__text { flex-grow: 1; flex-shrink: 1; }
+.cy-trade__name { font-size: 16px; color: var(--ice); }
+.cy-trade__kind { font-size: 12px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-trade__price { font-size: 16px; color: var(--amber); margin-left: 12px; }
+.cy-trade--blocked .cy-trade__name { color: var(--ice-faint); }
+.cy-trade--blocked .cy-trade__kind { color: var(--red); }
+.cy-trade--blocked .cy-trade__price { color: var(--ice-faint); }
+.cy-shop__detail { flex-grow: 1; flex-shrink: 1; padding-left: 22px; border-left-width: 1px; border-left-color: var(--line); }
+
+/* ------------------------------------------------------------------ scanner (after the prototype's ui/Scanner.js) */
+
+.cy-scan__dim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: rgba(2, 10, 18, 0.45); border-width: 2px; border-color: rgba(47, 243, 255, 0.25); }
+.cy-scan__sweep { position: absolute; left: 0; right: 0; height: 2px; background-color: rgba(47, 243, 255, 0.35); }
+.cy-scan__tags { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.cy-tag { position: absolute; width: 0; height: 0; }
+.cy-tag__box { position: absolute; }
+.cy-tag__c { position: absolute; width: 12px; height: 12px; border-color: var(--cyan); }
+.cy-tag__c--tl { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+.cy-tag__c--tr { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+.cy-tag__c--bl { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+.cy-tag__c--br { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+.cy-tag--place .cy-tag__c { border-color: var(--amber); }
+.cy-tag--vehicle .cy-tag__c { border-color: var(--ice-dim); }
+.cy-tag__card { position: absolute; width: 260px; padding: 6px 10px; background-color: rgba(7, 12, 21, 0.82); border-left-width: 2px; border-left-color: var(--cyan); }
+.cy-tag--place .cy-tag__card { border-left-color: var(--amber); }
+.cy-tag__name { font-size: 16px; color: var(--ice); white-space: normal; }
+.cy-tag__sub { font-size: 12px; color: var(--ice-faint); letter-spacing: 2px; }
+.cy-tag__action { font-size: 13px; color: var(--amber); letter-spacing: 1px; }
+.cy-tag__dist { font-size: 13px; color: var(--cyan); }
+.cy-scan__hud { position: absolute; left: 0; right: 0; bottom: 150px; align-items: center; }
+.cy-scan__title { flex-direction: row; align-items: center; }
+.cy-scan__label { font-size: 22px; color: var(--cyan); margin-right: 16px; }
+.cy-scan__state { font-size: 14px; color: var(--ice-dim); letter-spacing: 3px; }
+.cy-scan__meter { width: 360px; height: 4px; margin: 6px 0; background-color: rgba(47, 243, 255, 0.15); }
+.cy-scan__meterfill { position: absolute; left: 0; top: 0; bottom: 0; background-color: var(--cyan); }
+.cy-scan__readout { font-size: 14px; color: var(--ice-dim); letter-spacing: 2px; }
+
+/* the menu fills the screen inside its margin, whatever the page holds; flexible panes start from nothing so long lines wrap instead of widening the menu */
+.cy-menu { align-items: stretch; justify-content: flex-start; }
+.cy-menu__shell { width: 100%; }
+.cy-journal__detail, .cy-ch__main, .cy-inv__main, .cy-shop__detail { width: 0; }
+.cy-perk__name { flex-shrink: 1; white-space: normal; }
+.cy-perk__rank { margin-left: 12px; }
+
+/* ------------------------------------------------------------------ the gun (after the prototype's ui/hud/WeaponPanel.js and Crosshair.js) */
+
+.cy-gun { right: 36px; bottom: 36px; width: 340px; border-left-color: var(--amber); }
+.cy-gun .cy-hud-tag { color: var(--amber); }
+.cy-gun__name { font-size: 24px; color: var(--ice); }
+.cy-gun__kind { font-size: 13px; color: var(--ice-faint); letter-spacing: 3px; margin-bottom: 6px; }
+.cy-gun__pips { flex-direction: row; flex-wrap: wrap; margin-bottom: 6px; }
+.cy-gun__pip { width: 6px; height: 12px; margin: 0 2px 2px 0; background-color: var(--cyan); }
+.cy-gun__pip--spent { background-color: rgba(120, 150, 175, 0.2); }
+.cy-gun__count { flex-direction: row; align-items: flex-end; }
+.cy-gun__ammo { font-size: 44px; color: var(--ice); }
+.cy-gun__slash { font-size: 26px; color: var(--ice-faint); margin: 0 8px 6px 8px; }
+.cy-gun__reserve { font-size: 20px; color: var(--ice-dim); margin-bottom: 8px; }
+.cy-gun__modes { flex-direction: row; margin-top: 4px; }
+.cy-gun__mode { font-size: 12px; color: var(--ice-faint); letter-spacing: 2px; margin-right: 12px; padding: 1px 4px; }
+.cy-gun__mode--on { color: var(--ink); background-color: var(--amber); }
+.cy-gun--low .cy-gun__ammo { color: var(--amber); }
+.cy-gun--dry .cy-gun__ammo { color: var(--red); }
+.cy-gun--reloading .cy-gun__pips { opacity: 0.4; }
+
+.cy-crosshair--aim .cy-crosshair__dot { background-color: var(--amber); }
+.cy-crosshair--aim .cy-crosshair__t, .cy-crosshair--aim .cy-crosshair__b, .cy-crosshair--aim .cy-crosshair__l, .cy-crosshair--aim .cy-crosshair__r { background-color: rgba(255, 176, 58, 0.9); }
+
+.cy-hitmark { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; }
+.cy-hitmark__bar { position: absolute; width: 3px; height: 13px; background-color: var(--ice); }
+.cy-hitmark__bar--0 { left: -12px; top: -16px; rotate: -45deg; }
+.cy-hitmark__bar--1 { left: 9px; top: -16px; rotate: 45deg; }
+.cy-hitmark__bar--2 { left: -12px; top: 3px; rotate: 45deg; }
+.cy-hitmark__bar--3 { left: 9px; top: 3px; rotate: -45deg; }
+.cy-hitmark--crit { rotate: 45deg; scale: 1.35 1.35; }
+.cy-hitmark--crit .cy-hitmark__bar { background-color: var(--red); }

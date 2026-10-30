@@ -85,6 +85,13 @@ add('mus.bass', 2, { freq: 55, dur: 0.5, cutoff: 700 });
 add('mus.arp', 2, { freq: 440, dur: 0.3 });
 add('mus.stab', 2, { dur: 0.8, freqs: [220, 262, 330], cutoff: 1800 });
 add('mus.lead', 2, { freq: 440, dur: 0.6 });
+for (const gun of ['pistol', 'revolver', 'smg', 'rifle', 'shotgun', 'sniper', 'energy']) add(`weapon.${gun}`, 2);
+add('weapon.crack', 1);
+add('weapon.dryfire', 1);
+add('weapon.switch', 1);
+add('weapon.reload', 2);
+add('weapon.shell', 1.5);
+for (const m of ['concrete', 'metal', 'flesh']) add(`impact.${m}`, 1.5);
 
 const { browser, page } = await openBlankPage();
 await page.goto(`http://127.0.0.1:${port}/blank.html`);

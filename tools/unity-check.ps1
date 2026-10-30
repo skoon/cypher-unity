@@ -16,6 +16,7 @@
 # Edit and Play accept -TestFilter <semicolon-separated names or patterns> to run only some tests, e.g. -TestFilter Cypher.Tests.UiScreenTests
 # Benchmark -Quality Performance|Low|Medium|High|Ultra pins that preset (adaptive quality is always off in a benchmark).
 # Benchmark -NoCrowd leaves the streets empty: the control for what the people cost. -NoTraffic leaves the roads and the sky empty: the control for what the traffic costs; -NoVehicleLights keeps the traffic and takes the point lights off the vehicles. -NoAudio switches every sound off: the control for what the audio costs.
+# Benchmark -Fire makes the pilot fire the gun in bursts (3 s of every 10 s) as it walks: Gate C's worst case.
 # Benchmark -Route centre|city picks the loop (centre is the M1 loop round the plaza; city tours every edge: use -BenchmarkSeconds 240).
 # Benchmark opens a borderless window of -Width x -Height for about warm-up + duration seconds; leave the machine alone meanwhile.
 # Exit codes of the player: 0 passed the 30 FPS gate, 1 failed it, 2 an exception, 3 invalid run (the character did not walk).
@@ -36,6 +37,7 @@ param(
     [switch]$NoTraffic,
     [switch]$NoVehicleLights,
     [switch]$NoAudio,
+    [switch]$Fire,
     [switch]$Release,
     [string]$TestFilter = '',
     [string]$ShotsDir = '',
@@ -119,7 +121,7 @@ function Step-Player {
 function Quote([string]$Text) { if ($Text -match '\s') { return '"' + $Text + '"' } return $Text }
 
 function Step-Benchmark {
-    Write-Host "== Benchmark ($Width x $Height, $WarmupSeconds s warm-up + $BenchmarkSeconds s$(if ($Quality) { ", $Quality" })$(if ($Route) { ", $Route route" }))"
+    Write-Host "== Benchmark ($Width x $Height, $WarmupSeconds s warm-up + $BenchmarkSeconds s$(if ($Quality) { ", $Quality" })$(if ($Route) { ", $Route route" })$(if ($Fire) { ", firing" }))"
     $exe = Join-Path $PlayerDir 'Cypher.exe'
     if (-not (Test-Path $exe)) { throw "No player at $exe; run -Step Player first" }
     New-Item -ItemType Directory -Force $BenchmarkDir | Out-Null
@@ -135,6 +137,7 @@ function Step-Benchmark {
     if ($NoTraffic) { $a += '--no-traffic' }
     if ($NoVehicleLights) { $a += '--no-vehicle-lights' }
     if ($NoAudio) { $a += '--no-audio' }
+    if ($Fire) { $a += '--benchmark-fire' }
     $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru
     $null = $p.Handle
     if (-not $p.WaitForExit(($WarmupSeconds + $BenchmarkSeconds + 120) * 1000)) {

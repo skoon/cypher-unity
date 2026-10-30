@@ -22,7 +22,7 @@ namespace Cypher.Tests
             Assert.AreEqual(new[]
             {
                 "moveForward", "moveBack", "moveLeft", "moveRight", "jump", "sprint", "crouch",
-                "interact", "scan", "inventory", "journal", "fire", "aim", "reload", "weapon1", "weapon2", "weapon3",
+                "interact", "scan", "inventory", "journal", "fire", "aim", "reload", "weapon1", "weapon2", "weapon3", "character",
             }, ControlCatalog.All.Select(a => a.Id).ToArray(), "ids are stored in settings files: never renamed, new ones at the end");
             foreach (ActionInfo a in ControlCatalog.All)
             {
@@ -106,6 +106,8 @@ namespace Cypher.Tests
         [TestCase("<Keyboard>/numpad5")]
         [TestCase("<Keyboard>/f5")]
         [TestCase("<Keyboard>/digit3")]
+        [TestCase("<Keyboard>/3")]
+        [TestCase("<Keyboard>/0")]
         [TestCase("<Keyboard>/backquote")]
         [TestCase("<Keyboard>/tab")]
         [TestCase("<Mouse>/leftButton")]
@@ -143,7 +145,6 @@ namespace Cypher.Tests
         [TestCase("<Keyboard>/anyKey")]
         [TestCase("<Keyboard>/a/b")]
         [TestCase("<Keyboard>/#(a)")]
-        [TestCase("<Keyboard>/1")]
         [TestCase("<Mouse>/position")]
         [TestCase("<Mouse>/delta")]
         [TestCase("<Mouse>/scroll")]

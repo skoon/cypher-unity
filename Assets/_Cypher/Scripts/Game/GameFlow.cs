@@ -154,6 +154,23 @@ namespace Cypher.Game
             if (SaveHost == null) return "Saving is not available.";
             return SaveHost.SaveNow();
         }
+        /// <summary>A game screen open over play (see <see cref="FlowModal"/>). It outlasts a pause, so resuming goes back to the screen; a new game or the title ends it.</summary>
+        public FlowModal Modal { get; private set; }
+
+        public event Action<FlowModal> ModalChanged;
+
+        /// <summary>Open or close a game screen's hold on the world. Only while playing (closing is allowed at any time).</summary>
+        public bool SetModal(FlowModal modal)
+        {
+            if (modal != FlowModal.None && State != FlowState.Playing) return false;
+            if (modal == Modal) return true;
+            Modal = modal;
+            if (State == FlowState.Playing) Apply(State, newSession: false);
+            Debug.Log($"[Cypher] flow modal {modal}");
+            ModalChanged?.Invoke(modal);
+            return true;
+        }
+
         public bool Pause() => _machine.TryHandle(FlowCommand.Pause);
         public bool Resume() => _machine.TryHandle(FlowCommand.Resume);
         public bool TogglePause() => _machine.TryHandle(FlowCommand.TogglePause);
@@ -199,14 +216,17 @@ namespace Cypher.Game
         void OnTransitioned(FlowTransition t)
         {
             Debug.Log($"[Cypher] flow {t.From} -> {t.To} ({t.Command}) at {Time.realtimeSinceStartup:0.0} s");
+            bool modalEnds = Modal != FlowModal.None && (t.NewSession || (t.To != FlowState.Playing && t.To != FlowState.Paused));
+            if (modalEnds) Modal = FlowModal.None;
             Apply(t.To, t.NewSession);
+            if (modalEnds) ModalChanged?.Invoke(FlowModal.None);
             StateChanged?.Invoke(t);
         }
 
         /// <summary>Make the scene match what <see cref="FlowPolicy"/> says about a state.</summary>
         void Apply(FlowState state, bool newSession)
         {
-            FlowRules rules = FlowPolicy.For(state);
+            FlowRules rules = FlowPolicy.For(state, Modal);
 
             Time.timeScale = (float)rules.TimeScale;
             CursorLockRequested = rules.CursorLocked;

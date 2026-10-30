@@ -143,6 +143,9 @@ namespace Cypher.Core
         /// <summary>The quest the HUD tracks, or null.</summary>
         public string Tracked { get; private set; }
 
+        /// <summary>Counts every change to the jobs (a start, a stage, an objective, the tracked job, an end, a load), so a view built at one revision holds until the next.</summary>
+        public int Revision { get; private set; }
+
         public QuestLog(IQuestHost host, IReadOnlyList<JsonObject> defs = null)
         {
             _host = host ?? throw new ArgumentException("QuestLog: host is required");
@@ -256,6 +259,7 @@ namespace Cypher.Core
             }
             if (!_states.ContainsKey(id)) _order.Add(id);
             _states[id] = new QuestRuntime { Id = id, State = "active" };
+            Revision++;
             if (Tracked == null) SetTracked(id);
             _host.Emit("rpg:questStarted", new JsonObject { ["quest"] = Snapshot(id) });
             EnterStage(id, Str(Objs(def["stages"])[0], "id"));
@@ -266,6 +270,7 @@ namespace Cypher.Core
         {
             if (id != null) Def(id);
             Tracked = id;
+            Revision++;
             _host.Emit("rpg:questTracked", new JsonObject { ["questId"] = id });
             return id;
         }
@@ -278,6 +283,7 @@ namespace Cypher.Core
             st.Stage = stageId;
             st.Objectives = Objs(stage["objectives"]).Select(o => (Str(o, "id"), false, 0.0)).ToList();
             st.TimeLeft = Get(stage, "timeLimit") is double limit ? limit : (double?)null;
+            Revision++;
             _host.ApplyEffects(RpgJs.AsList(Get(stage, "onEnter")), new JsonObject { ["questId"] = questId, ["stageId"] = stageId });
             _host.Emit("rpg:questUpdated", new JsonObject { ["quest"] = Snapshot(questId), ["stage"] = stageId });
             // a stage whose objectives are already met (the item was already carried) must not stall
@@ -294,6 +300,7 @@ namespace Cypher.Core
             int i = st.IndexOf(objectiveId);
             if (st.Objectives[i].Done) return RpgResult.Fail("already-done");
             st.Objectives[i] = (objectiveId, true, Get(objDef, "count") is double c ? c : 1);
+            Revision++;
             _host.ApplyEffects(RpgJs.AsList(Get(objDef, "onComplete")), new JsonObject { ["questId"] = questId, ["objectiveId"] = objectiveId });
             if (!silent)
             {
@@ -318,6 +325,7 @@ namespace Cypher.Core
             if (st.Objectives[i].Done) return RpgResult.Fail("already-done");
             double count = st.Objectives[i].Count + amount;
             st.Objectives[i] = (objectiveId, false, count);
+            Revision++;
             double need = Get(objDef, "count") is double n ? n : 1;
             if (count >= need) return CompleteObjective(questId, objectiveId);
             _host.Emit("rpg:questUpdated", new JsonObject { ["quest"] = Snapshot(questId), ["stage"] = st.Stage, ["objective"] = objectiveId });
@@ -395,6 +403,7 @@ namespace Cypher.Core
             st.State = failed ? "failed" : "completed";
             st.Outcome = outcomeId;
             st.TimeLeft = null;
+            Revision++;
             JsonObject granted = _host.GrantRewards(Get(outcome, "rewards") as JsonObject ?? new JsonObject(), new JsonObject { ["questId"] = questId, ["outcomeId"] = outcomeId });
             if (Tracked == questId)
             {
@@ -453,6 +462,18 @@ namespace Cypher.Core
             }
             return false;
         });
+
+        /// <summary>The breach targets that active jobs are waiting on: the targets of their open "hack" objectives.</summary>
+        public HashSet<string> OpenHackTargets()
+        {
+            var targets = new HashSet<string>();
+            ForEachActiveObjective((questId, o) =>
+            {
+                if (Str(o, "trigger") == "hack") targets.Add(Str(o, "target"));
+                return false;
+            });
+            return targets;
+        }
 
         public void NotifyKill(string tag, double amount = 1) => ForEachActiveObjective((questId, o) =>
         {
@@ -530,6 +551,7 @@ namespace Cypher.Core
             _states.Clear();
             _order.Clear();
             Tracked = null;
+            Revision++;
             if (data == null) return this;
             foreach (JsonObject s in Objs(Get(data, "states")))
             {

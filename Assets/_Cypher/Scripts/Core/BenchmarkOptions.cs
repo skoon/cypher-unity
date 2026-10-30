@@ -34,6 +34,7 @@ namespace Cypher.Core
         public const string WarmupFlag = "--benchmark-warmup";
         public const string QualityFlag = "--benchmark-quality";
         public const string RouteFlag = "--benchmark-route";
+        public const string FireFlag = "--benchmark-fire";
 
         public const double DefaultWarmupSeconds = 10;
         public const double DefaultDurationSeconds = 60;
@@ -73,7 +74,11 @@ namespace Cypher.Core
 
         public BenchmarkRoute Route { get; }
 
-        public BenchmarkOptions(bool enabled, string outputDirectory = null, double warmupSeconds = DefaultWarmupSeconds, double durationSeconds = DefaultDurationSeconds, QualityPreset? quality = null, BenchmarkRoute route = BenchmarkRoute.Centre)
+        /// <summary>The pilot fires the gun in bursts as it walks (<see cref="BenchmarkFire"/>): Gate C's worst case.</summary>
+        public bool Fire { get; }
+
+        public BenchmarkOptions(bool enabled, string outputDirectory = null, double warmupSeconds = DefaultWarmupSeconds, double durationSeconds = DefaultDurationSeconds, QualityPreset? quality = null, BenchmarkRoute route = BenchmarkRoute.Centre,
+            bool fire = false)
         {
             if (!(warmupSeconds >= 0) || double.IsInfinity(warmupSeconds)) throw new ArgumentOutOfRangeException(nameof(warmupSeconds), warmupSeconds, "warm-up must be finite and >= 0");
             if (!(durationSeconds > 0) || double.IsInfinity(durationSeconds)) throw new ArgumentOutOfRangeException(nameof(durationSeconds), durationSeconds, "duration must be finite and > 0");
@@ -83,6 +88,7 @@ namespace Cypher.Core
             DurationSeconds = durationSeconds;
             Quality = quality;
             Route = route;
+            Fire = fire;
         }
 
         public static BenchmarkOptions Disabled { get; } = new BenchmarkOptions(false);
@@ -99,6 +105,7 @@ namespace Cypher.Core
             bool durationGiven = false;
             QualityPreset? quality = null;
             BenchmarkRoute route = BenchmarkRoute.Centre;
+            bool fire = false;
 
             for (int i = 0; i < args.Count; i++)
             {
@@ -128,12 +135,16 @@ namespace Cypher.Core
                         route = RouteName(args, ref i);
                         anyValue = true;
                         break;
+                    case FireFlag:
+                        fire = true;
+                        anyValue = true;
+                        break;
                 }
             }
 
-            if (!enabled && anyValue) throw new ArgumentException($"{OutFlag}, {SecondsFlag}, {WarmupFlag}, {QualityFlag} and {RouteFlag} only make sense with {BenchmarkFlag}");
+            if (!enabled && anyValue) throw new ArgumentException($"{OutFlag}, {SecondsFlag}, {WarmupFlag}, {QualityFlag}, {RouteFlag} and {FireFlag} only make sense with {BenchmarkFlag}");
             if (!durationGiven) duration = DefaultDuration(route);
-            return enabled ? new BenchmarkOptions(true, outDir, warmup, duration, quality, route) : Disabled;
+            return enabled ? new BenchmarkOptions(true, outDir, warmup, duration, quality, route, fire) : Disabled;
         }
 
         static string Value(IReadOnlyList<string> args, ref int i)
@@ -178,5 +189,13 @@ namespace Cypher.Core
             }
             return v;
         }
+    }
+
+    /// <summary>When the benchmark's pilot holds the trigger: a three-second burst at the start of every ten seconds of play.</summary>
+    public static class BenchmarkFire
+    {
+        public const double Period = 10, Burst = 3;
+
+        public static bool Holding(double playSeconds) => playSeconds >= 0 && playSeconds % Period < Burst;
     }
 }

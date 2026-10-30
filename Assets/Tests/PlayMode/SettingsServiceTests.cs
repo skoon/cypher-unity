@@ -194,12 +194,12 @@ namespace Cypher.Tests
         {
             yield return SliceTestScene.Load();
             Assert.IsFalse(_storage.Exists);
-            Assert.AreEqual(AssignOutcome.Applied, Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k").Outcome);
+            Assert.AreEqual(AssignOutcome.Applied, Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y").Outcome);
             Assert.IsTrue(_storage.Exists, "a rebind is saved the moment it is made");
             StringAssert.Contains("jump:0", _storage.ReadAll());
 
             yield return SliceTestScene.Load();   // a fresh start of the game, reading the same file
-            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
+            Assert.AreEqual("<Keyboard>/y", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary));
             Assert.AreEqual(SettingsLoadOutcome.Loaded, Service.LoadResult.Outcome);
             Assert.IsNull(Service.Notice);
         }
@@ -220,16 +220,16 @@ namespace Cypher.Tests
         {
             yield return SliceTestScene.Load();
             GameSettings stale = Service.Current;                 // taken before the rebind, as an Options screen would
-            Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k");
+            Service.Bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y");
 
             stale.Graphics.FieldOfView = 95;
             Service.Apply(stale);
 
-            Assert.AreEqual("<Keyboard>/k", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary), "the rebind survives");
+            Assert.AreEqual("<Keyboard>/y", Service.Bindings.Get(GameAction.Jump, BindingSlot.Primary), "the rebind survives");
             Assert.AreEqual(95f, Camera.main.fieldOfView, 1e-4f, "while the rest of the copy applied");
-            Assert.AreEqual("<Keyboard>/k", Service.Current.Controls.Overrides["jump:0"]);
+            Assert.AreEqual("<Keyboard>/y", Service.Current.Controls.Overrides["jump:0"]);
             Service.Save();
-            Assert.AreEqual("<Keyboard>/k", new SettingsStore(_storage).Load().Settings.Controls.Overrides["jump:0"]);
+            Assert.AreEqual("<Keyboard>/y", new SettingsStore(_storage).Load().Settings.Controls.Overrides["jump:0"]);
         }
 
         [UnityTest]

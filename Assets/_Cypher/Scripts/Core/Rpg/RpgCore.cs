@@ -107,7 +107,17 @@ namespace Cypher.Core
 
         // ================================================================ plumbing
 
-        public void Emit(string type, JsonObject payload) => _emit(type, payload);
+        /// <summary>
+        /// Counts what the core has announced. Every change of state is followed by an event, so this and <see cref="QuestLog.Revision"/> tell a view built from the core when it
+        /// has gone stale (<see cref="JobMarkers"/>, <see cref="TrackedJob"/>).
+        /// </summary>
+        public int Revision { get; private set; }
+
+        public void Emit(string type, JsonObject payload)
+        {
+            Revision++;
+            _emit(type, payload);
+        }
 
         public void Notify(string text, string kind = "info") => Emit("rpg:notify", new JsonObject { ["text"] = text, ["kind"] = kind });
 
@@ -878,23 +888,91 @@ namespace Cypher.Core
             }
         }
 
+        /// <summary>What there is to do at a place (talk, breach or trade) and its prompt, or null when nothing; for the scanner.</summary>
+        public (string Kind, string Label)? InteractionAt(string locationKey)
+        {
+            var action = ActionAt(locationKey);
+            return action == null ? ((string, string)?)null : (action.Value.Kind, action.Value.Label);
+        }
+
+        /// <summary>
+        /// What E does at a place. A breach an active job is waiting on comes first, so a place with a conversation as well (the Data Core and Wire) can still be breached
+        /// (the prototype always talked there, and its main job could not be finished); otherwise the place's own thing.
+        /// </summary>
+        (string Kind, string Id, string Label)? ActionAt(string locationKey)
+        {
+            RefreshViews();
+            HashSet<string> wanted = _openHacks;
+            foreach (BreachTarget t in RpgHacking.Targets)
+            {
+                if (t.LocationKey == locationKey && wanted.Contains(t.Id)) return ("breach", t.Id, $"Breach {t.Name}");
+            }
+            int i = Interactions.FindIndex(x => x.Key == locationKey);
+            return i < 0 ? ((string, string, string)?)null : (Interactions[i].Kind, Interactions[i].Id, Interactions[i].Label);
+        }
+
         /// <summary>The nearest thing to do within reach of the player, or null.</summary>
         public JsonObject GetNearbyInteractable(double range = 4.5)
         {
-            if (_locations.Count == 0) return null;
-            var near = RpgLocations.Nearest(_locationOrder, PlayerX, PlayerZ);
-            if (near == null) return null;
-            (RpgLocation location, double distance) = near.Value;
-            double limit = Math.Max(range, location.Radius * 0.6);
-            if (distance > limit) return null;
-            int i = Interactions.FindIndex(x => x.Key == location.Key);
-            if (i < 0) return null;
-            var action = Interactions[i];
+            var nearby = Nearby(range);
+            if (nearby == null) return null;
+            (RpgLocation location, double distance, var action) = nearby.Value;
             return new JsonObject
             {
                 ["locationKey"] = location.Key, ["name"] = location.Name, ["distance"] = RpgJs.Round(distance * 100) / 100, ["kind"] = action.Kind, ["id"] = action.Id,
                 ["prompt"] = action.Label,
             };
+        }
+
+        /// <summary>What E would do now (kind, id and prompt), or null: <see cref="GetNearbyInteractable"/> without its payload, for views that ask every frame.</summary>
+        public (string Kind, string Id, string Label)? NearbyAction(double range = 4.5) => Nearby(range)?.Action;
+
+        (RpgLocation Location, double Distance, (string Kind, string Id, string Label) Action)? Nearby(double range)
+        {
+            if (_locations.Count == 0) return null;
+            var near = RpgLocations.Nearest(_locationOrder, PlayerX, PlayerZ);
+            if (near == null) return null;
+            (RpgLocation location, double distance) = near.Value;
+            if (distance > Math.Max(range, location.Radius * 0.6)) return null;
+            var action = ActionAt(location.Key);
+            return action == null ? null : ((RpgLocation, double, (string, string, string))?)(location, distance, action.Value);
+        }
+
+        // ================================================================ views for the screens
+
+        (int Core, int Quests) _viewsAt = (-1, -1);
+        List<JsonObject> _jobMarkers;
+        JsonObject _trackedJob;
+        HashSet<string> _openHacks;
+
+        void RefreshViews()
+        {
+            var at = (Revision, Quests.Revision);
+            if (at == _viewsAt) return;
+            _viewsAt = at;
+            _jobMarkers = Quests.Markers();
+            _trackedJob = Quests.Tracked != null ? Quests.Snapshot(Quests.Tracked) : null;
+            _openHacks = Quests.OpenHackTargets();
+        }
+
+        /// <summary>The job markers (<see cref="QuestLog.Markers"/>) as of the last change, built once and shared: for views that read them every frame. Read only.</summary>
+        public IReadOnlyList<JsonObject> JobMarkers
+        {
+            get
+            {
+                RefreshViews();
+                return _jobMarkers;
+            }
+        }
+
+        /// <summary>The tracked job's snapshot (<see cref="QuestLog.Snapshot"/>) as of the last change, or null. Read only.</summary>
+        public JsonObject TrackedJob
+        {
+            get
+            {
+                RefreshViews();
+                return _trackedJob;
+            }
         }
 
         /// <summary>Do the nearby thing (the E key).</summary>

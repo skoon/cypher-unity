@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Cypher.Core;
 using Cypher.Game;
 using Cypher.Player;
+using Cypher.Rpg;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -18,13 +19,18 @@ namespace Cypher.UI
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-20)]   // after SettingsService and GameFlow have made what the screens show
-    public sealed class UiRoot : MonoBehaviour
+    public sealed partial class UiRoot : MonoBehaviour
     {
         const string ThemePath = "CypherUI/CypherTheme";
         const string StylePath = "CypherUI/Cypher";
 
         [SerializeField] GameFlow flow;
         [SerializeField] SettingsService settings;
+        [SerializeField] RpgService rpg;
+        [SerializeField] Camera gameCamera;
+        [SerializeField] Cypher.Actors.CrowdController crowd;
+        [SerializeField] Cypher.Actors.TrafficController traffic;
+        [SerializeField] Cypher.Combat.WeaponSystem guns;
 
         readonly ScreenStack _stack = new ScreenStack();
         readonly NoticeQueue _notices = new NoticeQueue();
@@ -37,6 +43,7 @@ namespace Cypher.UI
         OptionsScreen _options;
         DialogView _dialog;
         ToastLayer _toasts;
+        Hud _hud;
         InputAction _back;
         InputAction _tabPrevious;
         InputAction _tabNext;
@@ -64,12 +71,23 @@ namespace Cypher.UI
 
         public ToastLayer Toasts => _toasts;
 
+        /// <summary>The in-game HUD, or null when the UI was made without the RPG (the menu-only test scenes).</summary>
+        public Hud Hud => _hud;
+
         public bool IsCapturing => _capture != null && _capture.IsActive;
 
         public void Configure(GameFlow gameFlow, SettingsService settingsService)
         {
             flow = gameFlow;
             settings = settingsService;
+        }
+
+        /// <summary>The menus and the HUD, which reads the RPG and places the waypoint with the game camera.</summary>
+        public void Configure(GameFlow gameFlow, SettingsService settingsService, RpgService rpgService, Camera camera)
+        {
+            Configure(gameFlow, settingsService);
+            rpg = rpgService ?? throw new ArgumentNullException(nameof(rpgService));
+            gameCamera = camera ?? throw new ArgumentNullException(nameof(camera));
         }
 
         void Awake()
@@ -118,6 +136,8 @@ namespace Cypher.UI
                 settings.Bindings.Changed -= OnBindingsChanged;
             }
             _capture?.Dispose();
+            _hud?.Detach();
+            DetachGameScreens();
             foreach (InputAction a in new[] { _back, _tabPrevious, _tabNext }) a?.Dispose();
             if (_panel != null) Destroy(_panel);
         }
@@ -126,6 +146,13 @@ namespace Cypher.UI
         {
             if (_loading.IsShown && !_loading.IsLeaving) _loading.SetProgress(flow.LoadProgress, flow.LoadStatus);
             _toasts.Update(Time.unscaledTimeAsDouble);
+            if (_hud != null)
+            {
+                bool playing = flow.State == FlowState.Playing && rpg.Core != null;
+                _hud.SetShown(playing && (_gameScreen == UiScreen.None || ModalFor(_gameScreen) == FlowModal.Interaction));
+                UpdateGameScreens(Time.unscaledDeltaTime);
+                if (playing) _hud.Update(gameCamera, Time.unscaledTimeAsDouble, Time.unscaledDeltaTime);
+            }
         }
 
         // ------------------------------------------------------------------ building
@@ -178,6 +205,16 @@ namespace Cypher.UI
             _options.BackRequested += () => CloseTop();
             _options.RebindRequested += BeginRebind;
 
+            if (rpg != null)
+            {
+                if (gameCamera == null) throw new InvalidOperationException("UiRoot's HUD needs the game camera; call Configure with it.");
+                _hud = new Hud(rpg);
+                if (guns != null) _hud.AttachGuns(guns);
+                _hud.SetInteractKey(() => BindingText.Describe(settings.Bindings.Get(GameAction.Interact, BindingSlot.Primary)).ToUpperInvariant());
+                _hud.SetShown(false);
+                _root.Add(_hud.Root);   // beneath the menus
+                BuildGameScreens();
+            }
             foreach (MenuScreen s in new MenuScreen[] { _title, _pause, _options, _dialog, _loading }) _root.Add(s.Root);
             _root.Add(_toasts.Root);
             UiFonts.Apply(_root);
@@ -195,6 +232,7 @@ namespace Cypher.UI
         {
             CancelCapture();
             _stack.SetFlowState(t.To);
+            FollowFlowForGameScreens(t);
             if (t.To == FlowState.Paused) _pause.Remembered = null;
             // the pause menu opens and closes with a sound; the title, appearing at the start, does not
             if (t.To == FlowState.Paused) UiSound.Raise(UiSound.Open);
@@ -221,6 +259,7 @@ namespace Cypher.UI
         void OnBindingsChanged()
         {
             if (_started) _options.RefreshControls();
+            _hud?.KeyChanged();
         }
 
         void Refresh()
@@ -236,6 +275,7 @@ namespace Cypher.UI
             _pause.SetShown(baseScreen == UiScreen.Pause && !overlay);
             _options.SetShown(Contains(UiScreen.Options));
             _dialog.SetShown(IsDialog(_stack.Top));
+            ShowGameScreens();
             FocusSoon();
 
             if (_stack.Top != _loggedTop)
@@ -267,6 +307,10 @@ namespace Cypher.UI
                 case UiScreen.ConfirmTitle:
                 case UiScreen.Rebind:
                 case UiScreen.Conflict: return _dialog;
+                case UiScreen.Dialogue: return _conversation;
+                case UiScreen.Breach: return _breach;
+                case UiScreen.GameMenu: return _menu;
+                case UiScreen.Vendor: return _vendor;
                 default: return null;
             }
         }
@@ -348,6 +392,12 @@ namespace Cypher.UI
                 return;
             }
 
+            if (IsGameScreen(_stack.Top))
+            {
+                LeaveGameScreen();
+                return;
+            }
+
             if (_stack.Base == UiScreen.None && _stack.Overlays.Count == 0)
             {
                 if (!fromBButton) flow.Pause();
@@ -370,6 +420,11 @@ namespace Cypher.UI
 
         void SwitchOptionsTab(int direction)
         {
+            if (_stack.Top == UiScreen.GameMenu)
+            {
+                ShowMenuTab(_menu.Step(direction));
+                return;
+            }
             if (_stack.Top != UiScreen.Options) return;
             _options.SwitchTab(direction);
             FocusSoon();

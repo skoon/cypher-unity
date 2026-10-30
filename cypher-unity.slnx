@@ -6,6 +6,7 @@
   <Project Path="Cypher.Audio.csproj" />
   <Project Path="Cypher.UI.csproj" />
   <Project Path="Cypher.Capture.csproj" />
+  <Project Path="Cypher.Combat.csproj" />
   <Project Path="Cypher.Actors.csproj" />
   <Project Path="Cypher.City.csproj" />
   <Project Path="Cypher.Editor.csproj" />

@@ -32,10 +32,10 @@ namespace Cypher.Core
     }
 
     /// <summary>
-    /// The prototype's sound bank for what this game plays: the menu sounds, the city's ambient one-shots, the player's footsteps and foley, and the score's instruments. Every sound is made
+    /// The prototype's sound bank for what this game plays: the menu sounds, the city's ambient one-shots, the player's footsteps and foley, the score's instruments, and the guns and their bullet impacts. Every sound is made
     /// from noise and oscillators; given a seed the same sound comes out every time, and each seed is another take of it.
     /// </summary>
-    public static class SoundBank
+    public static partial class SoundBank
     {
         const double UiRoot = 233.08;
 
@@ -48,6 +48,7 @@ namespace Cypher.Core
             RegisterUi();
             RegisterAmbient();
             RegisterMusic();
+            RegisterWeapons();
         }
 
         public static IReadOnlyList<string> Names => Order;

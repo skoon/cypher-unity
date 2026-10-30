@@ -34,6 +34,9 @@ namespace Cypher.Player
         public PlayerMotor Motor { get; } = new PlayerMotor();
         public LookState Look { get; } = new LookState();
 
+        /// <summary>Gun recoil and shake: added to the view and decaying back, never moving the aim itself.</summary>
+        public CameraKick Kick { get; } = new CameraKick();
+
         /// <summary>Where commands come from. Defaults to keyboard, mouse and gamepad.</summary>
         public IPlayerCommandSource CommandSource { get; set; }
 
@@ -119,6 +122,7 @@ namespace Cypher.Player
             CollisionFlags flags = Controller.Move(new Vector3((float)move.X, (float)move.Y, (float)move.Z));
             Motor.ReportResult(Controller.isGrounded, (flags & CollisionFlags.Above) != 0);
 
+            Kick.Step(dt);
             UpdateCamera();
         }
 
@@ -159,8 +163,10 @@ namespace Cypher.Player
         void UpdateCamera()
         {
             if (cameraPivot == null) return;
-            cameraPivot.localPosition = new Vector3(0f, (float)Motor.EyeHeight, 0f);
-            cameraPivot.localRotation = Quaternion.Euler((float)(-Look.Pitch * Mathf.Rad2Deg), 0f, 0f);
+            (double shakeX, double shakeY) = Kick.ShakeOffset(Time.timeAsDouble);
+            cameraPivot.localPosition = new Vector3((float)shakeX, (float)(Motor.EyeHeight + shakeY), 0f);
+            // the kick looks up (positive pitch) and aside; Unity's pitch is negative upwards
+            cameraPivot.localRotation = Quaternion.Euler((float)(-(Look.Pitch + Kick.Pitch) * Mathf.Rad2Deg), (float)(-Kick.Yaw * Mathf.Rad2Deg), 0f);
         }
 
         /// <summary>

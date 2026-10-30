@@ -182,11 +182,34 @@ namespace Cypher.Core
             }
         }
 
+        /// <summary>The guns' sounds the game plays (the three guns' shots, the crack, the mechanics, brass, and the three impacts) and how many takes of each.</summary>
+        public static readonly IReadOnlyList<(string Sound, int Takes)> WeaponSounds = new[]
+        {
+            ("weapon.smg", 4), ("weapon.revolver", 4), ("weapon.energy", 3), ("weapon.crack", 3), ("weapon.dryfire", 2), ("weapon.switch", 2), ("weapon.reload", 2),
+            ("weapon.shell", 4), ("impact.concrete", 4), ("impact.metal", 4), ("impact.flesh", 3),
+        };
+
+        public static string WeaponKey(string sound, int take) => $"{sound}|{take}";
+
+        /// <summary>The guns' clips.</summary>
+        public static IEnumerable<ClipSpec> Weapons()
+        {
+            foreach ((string sound, int takes) in WeaponSounds)
+            {
+                for (int take = 0; take < takes; take++)
+                {
+                    string key = WeaponKey(sound, take);
+                    yield return new ClipSpec { Key = key, Sound = sound, Seed = SeedOf(key), Params = new VoiceParams() };
+                }
+            }
+        }
+
         public static IEnumerable<ClipSpec> All()
         {
             foreach (ClipSpec s in Ui()) yield return s;
             foreach (ClipSpec s in Foley()) yield return s;
             foreach (ClipSpec s in Ambient()) yield return s;
+            foreach (ClipSpec s in Weapons()) yield return s;
         }
     }
 

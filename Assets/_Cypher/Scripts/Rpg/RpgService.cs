@@ -42,7 +42,7 @@ namespace Cypher.Rpg
         GameInput _input;
         RpgCore _core;
         double _accumulator;
-        string _prompt;
+        string _prompt, _promptKind, _promptId;
         bool _subscribed;
 
         /// <summary>The game in progress, or null (before a game, and at the title).</summary>
@@ -56,6 +56,12 @@ namespace Cypher.Rpg
 
         /// <summary>The game's buttons beyond walking, for whoever needs them (the HUD, the guns).</summary>
         public GameInput Input => _input;
+
+        /// <summary>The player, for whoever draws where they are (the compass, the minimap).</summary>
+        public FirstPersonController Player => player;
+
+        /// <summary>The city as the places were put on it (blocks and buildings), for the minimap; null before the first game.</summary>
+        public RpgCityMeta CityMeta { get; private set; }
 
         public void Configure(GameFlow gameFlow, CityBuilder cityBuilder, FirstPersonController firstPerson, SettingsService settingsService)
         {
@@ -136,7 +142,8 @@ namespace Cypher.Rpg
             var clock = System.Diagnostics.Stopwatch.StartNew();
             _core = new RpgCore(Forward, Seed, _storage, Now);
             _core.CaptureWorld = CaptureWorld;
-            _core.SetCity(RpgCityMeta.From(city.Slice.Plan));
+            CityMeta = CityMeta ?? RpgCityMeta.From(city.Slice.Plan);
+            _core.SetCity(CityMeta);
             if (continueSaved)
             {
                 RpgResult loaded = _core.Load(Slot);
@@ -148,7 +155,7 @@ namespace Cypher.Rpg
                 _core.GiveStartingKit();
             }
             _accumulator = 0;
-            _prompt = null;
+            _prompt = _promptKind = _promptId = null;
             Debug.Log($"[Cypher] rpg: {(continueSaved ? "continued the saved game" : "new game")}, level {_core.Stats.Level}, {_core.GetLocationList().Count} places; ready in {clock.ElapsedMilliseconds} ms");
             CoreChanged?.Invoke(_core);
         }
@@ -181,16 +188,20 @@ namespace Cypher.Rpg
             if (_accumulator > StepSeconds) _accumulator = 0;
             SyncPrompt();
 
-            if (_input.WasPressed(GameAction.Interact) && !_core.Dialogue.Active) _core.Interact();
+            // E does nothing while a game screen is open (it would talk over the conversation, or trade from inside a menu)
+            if (_input.WasPressed(GameAction.Interact) && !_core.Dialogue.Active && flow.Modal == FlowModal.None) _core.Interact();
         }
 
         /// <summary>Announce the interaction prompt when it changes (<c>rpg:promptChanged</c>, as the prototype's system does), for the HUD.</summary>
         void SyncPrompt()
         {
+            // the cheap question every frame; the payload is built only when the answer changes
+            var action = _core.NearbyAction();
+            if (action?.Kind == _promptKind && action?.Id == _promptId) return;
+            _promptKind = action?.Kind;
+            _promptId = action?.Id;
+            _prompt = action != null ? action.Value.Kind + ":" + action.Value.Id : null;
             JsonObject target = _core.GetNearbyInteractable();
-            string key = target != null ? $"{target["kind"]}:{target["id"]}" : null;
-            if (key == _prompt) return;
-            _prompt = key;
             Forward("rpg:promptChanged", target != null
                 ? new JsonObject { ["text"] = target["prompt"], ["key"] = "E", ["targetId"] = target["id"], ["kind"] = target["kind"] }
                 : new JsonObject { ["text"] = null, ["key"] = null, ["targetId"] = null, ["kind"] = null });

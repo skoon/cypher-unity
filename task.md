@@ -32,10 +32,58 @@ Plan: `implementation_plan_m4.md` (approved 2026-10-27: guns mark hits only, a m
       **Found and fixed:** with 17 rows the Controls page scrolls, and a Down press was lost at the first row below the fold (the ScrollView took it to scroll);
       `FocusGrid` now takes Up/Down before the ScrollView and keeps the focused row in view. Tests: `RpgServicePlayTests` (7), `RpgSaveStorageTests` (5),
       Continue in `GameFlowMachineTests`; 22 older input, settings and UI tests moved off keys the new defaults use. Full run 2026-10-28: 1,631 fast loop, 1,772 EditMode, 340 PlayMode (the last four fixed and rerun).
-- [ ] 4. HUD.
-- [ ] 5. Menus and modal screens (inventory, character, journal, dialogue, vendor, breach, scanner).
-- [ ] 6. Guns and impacts.
-- [ ] 7. Integration and Gate C.
+- [x] 4. HUD (2026-10-28). `UI/Hud.cs` owned by UiRoot (shown only while playing): biomonitor (HP with draining ghost, ST, RAM chips, level/XP, money),
+  job tracker, compass with job pips, turning minimap (blocks, buildings, places, job markers), waypoint chevron held at the screen edge, notices from the RPG's
+  events, the interact prompt with the live binding, crosshair, hurt flash. Pure maths in `Core/Ui/HudModel.cs`. World markers: `Rpg/PlaceMarkers.cs` +
+  `Core/Rpg/PlaceMarkerArt.cs` (beam with a gap at the name, neon name panel, ground glow; NeonAdd copy + names atlas; amber = tracked step, magenta = other job,
+  cyan = place; fades out within 9-3 m). StrokeFont gained ' — &. UiShots walk: HUD shots 11a-11d (and its Jump rebind now uses K; J is Journal).
+  Verified: 1,643 fast loop, 1,784 EditMode, 346 PlayMode (one earlier PlayMode run crashed the Editor natively in PropPlayTests while building a test city;
+  the rerun passed), shots in `shots_m4_hud/`.
+- [x] 5. Menus and modal screens (plan `implementation_plan_m4_step5.md`: user chose A, working screens on the real core; K opens the character sheet).
+  - [x] Plumbing: `FlowModal` (Menu stops time, Interaction stops only the player) in `FlowPolicy`/`GameFlow.SetModal` (kept across a pause, ended by the title/new game);
+    `UiScreen.GameMenu/Vendor/Dialogue/Breach` on the stack (only over play); `UiRoot.Game.cs` opens them from the RPG's events, Esc leaves them telling the core,
+    a vendor asked for by an answer waits for the conversation to close; E is ignored while a screen is open. `GameAction.Character` (K; the tests' free key moved K -> Y).
+  - [x] Conversation (`ConversationScreen`, `Core/Ui/DialogueModel`): portrait, speaker, typewriter (62 cps, Space skips), numbered answers (1-5), checks PASSED/INSUFFICIENT,
+    last line kept with LEAVE after an ending node. Tests: DialogueModelTests 5, ConversationPlayTests 5.
+  - [x] Breach (`BreachScreen`, `Core/Ui/BreachModel`): timer, buffer, matrix (live/dim/spent, the line banded), daemons with hot codes and overflow, log, outcome 1.8 s then
+    closes; Esc aborts (core CancelBreach). Tests: BreachModelTests 5, BreachPlayTests 5.
+  - [x] Game menu (`GameMenuScreen`: tabs INVENTORY / CHARACTER / JOURNAL, keys Tab/I, K, J toggle or switch, LB/RB switch, Esc closes; stops the world; HUD hidden).
+    Inventory (`InventoryPage`, `Core/Ui/InventoryModel`): categories, tiles edged by rarity, detail with stats, compare vs worn, mods; equip/unequip, use, install chrome,
+    load/unload the deck, drop (job items and worn things refused). Character (`CharacterPage`, `CharacterModel`): level/XP/cred, attributes with + , the core's perk
+    trees by tier (Submit buys; reasons shown), respec, chrome by slot with REMOVE. Journal (`JournalPage`, `JournalModel`): active (tracked first) / available / finished,
+    detail with stage, objectives and distances, time left, ending and pay by name; Submit or TRACK tracks.
+  - [x] Vendor (`VendorScreen`, `VendorModel`): opened by the core (E at a vendor, or Kaz's "What are you selling tonight?", which waits for the conversation to end);
+    shelf at buy price, bag at sell price, what cannot be afforded/carried/sold marked; Submit buys or sells one; Esc closes the shop in the core.
+  - [x] Scanner (`ScannerOverlay`, `ScanModel`): hold F over play; charge at the prototype's rates; tags the nearest 7 real contacts in view (places with what can be done
+    there via new `RpgCore.InteractionAt`, people from the crowd, vehicles); not under a game screen. UI now references Cypher.Actors; `UiRoot.ConfigureScanner`.
+  - Tests: Dialogue/Breach/Journal/Inventory/Character/Vendor/ScanModel (fast loop) + Conversation/Breach/GameMenu/Vendor/Scanner PlayTests. Shots 11e-11k in UiShots.
+  - [x] Look fixes after the first shots: menu fills the screen (long journal text wrapped), perk text fills the prototype's unfilled {n} with the per-rank value
+    (`CharacterModel.Describe`), long perk names wrap, breach focus moves to a live cell after a pick.
+  - Verified 2026-10-28: 1,684 fast loop, 1,826 EditMode, 366 PlayMode; shots in `shots_m4_menus/` (11e-11k). Awaiting the user's look review.
+- [x] 6. Guns and impacts (plan `implementation_plan_m4_step6.md`; user chose A, the prototype's three guns).
+  - [x] Core/Combat: `WeaponTable` (Wasp/Magnat/Voltline, prototype numbers, anchors), `WeaponRig` (fixed-step rules: draw/holster/reload/inspect, auto/semi/charge,
+    dry fire into reload, seat, spread, ADS, sprint, seeded shots), `ViewmodelPose` (lateUpdate pose: hip/ADS/sprint, breathing, bob, sway, kick springs, scripted
+    moves and parts, glow channels, FOVs), `CameraKick`. Tests: WeaponRigTests 14, ViewmodelPoseTests 5. No Node golden for the rules (the class needs WebGL);
+    numbers and curves copied line for line.
+  - [x] `WeaponModels`: the three guns and three.js's primitives ported exactly; golden `tools/gen-golden-weapons.mjs` -> `weapons_golden.txt`, matches to 2e-6.
+  - [x] Unity: `Viewmodel`/`GunFx`/`GunFxAlpha` shaders, `ViewmodelRig`, `WeaponSystem` (60 Hz steps, raycast, `ShotSurface` on people/cars/props),
+    `ImpactSim` + `GunFxRenderer` (decals, sparks, smoke, debris, tracers, brass, lights), `GunAudio` + weapon/impact recipes (golden, 114 sounds), `GunHud`
+    (panel, crosshair spread, hit marker). Tests: ImpactSimTests 8, Reticle, WeaponModelsGolden 3, GunPlayTests 7. Shots 11l-11t in `shots_m4_guns/`.
+  - Deviations: the WaveShaper is 2x oversampled to Chromium's design (RMS within ~1.1e-3, not sample-exact); shots play their class profile (the prototype played
+    the pistol for all three); shells fly a simple arc, not physics bodies; only proxied people and cars take hits; fixed an M2 bug where the 1-3 bindings never
+    fired (the control names are `1..3`). Full-auto kick pitches the Wasp ~30 degrees after 9 shots; that is the prototype's spring and numbers.
+  - Verified 2026-10-29: 1,719 fast loop, 1,860 EditMode, 373 PlayMode. Awaiting the user's look review.
+- [x] 7. Integration and Gate C, verified 2026-10-29: 1,723 fast loop, 1,864 EditMode, 375 PlayMode (plan `implementation_plan_m4_step7.md`; user chose: teleport between places, the pilot fires bursts, one ending with Save/Continue halfway).
+  - [x] `MainJobPlayTests`: the main job to the corpo ending through E, the conversation and breach screens, with a save, the title and Continue halfway, and bursts on the way.
+  - [x] Bug found by the pilot (also in the prototype): at the Data Core E always talked to Wire, so "Breach the core" could never be done. User chose: a breach an active job is
+    waiting on comes first (`RpgCore.ActionAt`, `QuestLog.OpenHackTargets`); test in RpgWorldTests; core goldens unchanged.
+  - [x] Bug found by the census: bullet holes and sparks outlived a game. `ImpactSim.Clear()` on a new session.
+  - [x] Census: the three-games test now Continues games 2 and 3, talks, opens every menu tab, fires, saves, and counts UI elements. Games 2 and 3 equal.
+  - [x] `--benchmark-fire` / `-Fire` (unity-check, gate-b): `BenchmarkFire` 3 s of every 10 s, reserve kept full; `WeaponSystem.ScriptedFire`.
+  - [x] Shots of every screen in `shots_m4_gate_c/` (37; added 11f2 answered, 11g2 breach complete). No title-with-Continue shot: the shots player would write the real save.
+  - [x] Gate C PASSED 2026-10-29 (one run each): Medium 83.6 FPS p99 17.1 ms, Ultra 67.2 FPS p99 20.7 ms (Gate B was 88.9/15.6 and 73.3/17.9). Data in `benchmarks/gate-c-2026-10-29/`, write-up in
+    `performance_results.md`. Allocation found at ~47 KB a frame, then FIXED on the user's yes: cached views in the core (`JobMarkers`, `TrackedJob`, `NearbyAction`, revisions), HUD labels written only on change,
+    markers re-tinted only on change. Player rerun: Medium 86.0 FPS p99 16.0 ms 9.8 KB/frame, Ultra 70.4 FPS p99 19.4 ms 11.3 KB/frame. `AllocationPlayTests` holds a 10 KB budget.
 
 # Milestone 2 — task checklist
 

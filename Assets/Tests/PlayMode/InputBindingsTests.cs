@@ -40,14 +40,14 @@ namespace Cypher.Tests
         [Test]
         public void ReboundJumpFollowsTheNewKeyAndTheOldKeyDoesNothing()
         {
-            Assert.AreEqual(AssignOutcome.Applied, _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k").Outcome);
+            Assert.AreEqual(AssignOutcome.Applied, _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y").Outcome);
 
             _input.Hold(Key.Space);
             Assert.IsFalse(Poll().JumpPressed, "Space is no longer jump");
             _input.ReleaseAll();
             Poll();
 
-            _input.Hold(Key.K);
+            _input.Hold(Key.Y);
             Assert.IsTrue(Poll().JumpPressed, "J is");
         }
 
@@ -124,14 +124,14 @@ namespace Cypher.Tests
         public void ReboundMovementKeysMoveInTheRightDirections()
         {
             _bindings.Assign(GameAction.MoveForward, BindingSlot.Primary, "<Keyboard>/o");
-            _bindings.Assign(GameAction.MoveBack, BindingSlot.Primary, "<Keyboard>/k");
+            _bindings.Assign(GameAction.MoveBack, BindingSlot.Primary, "<Keyboard>/y");
             _bindings.Assign(GameAction.MoveLeft, BindingSlot.Primary, "<Keyboard>/n");
             _bindings.Assign(GameAction.MoveRight, BindingSlot.Primary, "<Keyboard>/l");
 
             _input.Hold(Key.O);
             Assert.AreEqual(1.0, Poll().Forward, 1e-6);
             _input.ReleaseAll();
-            _input.Hold(Key.K);
+            _input.Hold(Key.Y);
             Assert.AreEqual(-1.0, Poll().Forward, 1e-6);
             _input.ReleaseAll();
             _input.Hold(Key.N);
@@ -201,7 +201,7 @@ namespace Cypher.Tests
         [Test]
         public void ResetPutsTheDefaultKeysBack()
         {
-            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k");
+            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y");
             _bindings.Reset(GameAction.Jump);
             _input.Hold(Key.Space);
             Assert.IsTrue(Poll().JumpPressed);
@@ -223,7 +223,7 @@ namespace Cypher.Tests
         public void ADisposedSourceIgnoresLaterChangesWithoutThrowing()
         {
             _source.Dispose();
-            Assert.DoesNotThrow(() => _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k"));
+            Assert.DoesNotThrow(() => _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y"));
             _source = new InputSystemCommandSource(_bindings);   // so TearDown has something to dispose
         }
 
@@ -235,9 +235,9 @@ namespace Cypher.Tests
             int changes = 0;
             _bindings.Changed += () => changes++;
 
-            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k");   // applied
+            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y");   // applied
             Assert.AreEqual(1, changes);
-            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/k");   // unchanged
+            _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/y");   // unchanged
             _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/w");   // conflict
             _bindings.Assign(GameAction.Jump, BindingSlot.Primary, "<Keyboard>/escape");   // rejected
             _bindings.Unbind(GameAction.Jump, BindingSlot.Primary);                   // refused: the only key
@@ -272,7 +272,7 @@ namespace Cypher.Tests
         public void WritingDropsEntriesThatAreBackAtTheirDefaults()
         {
             var controls = new ControlsOptions();
-            controls.SetOverride("jump:0", "<Keyboard>/k");
+            controls.SetOverride("jump:0", "<Keyboard>/y");
             _bindings.WriteTo(controls);   // nothing is changed in force
             Assert.AreEqual(0, controls.Overrides.Count);
         }

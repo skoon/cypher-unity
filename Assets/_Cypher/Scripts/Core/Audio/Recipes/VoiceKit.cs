@@ -15,6 +15,12 @@ namespace Cypher.Core
         /// <summary>The voice's input: where a recipe sends what it makes.</summary>
         public readonly GainNode Input;
 
+        /// <summary>
+        /// The voice's own reverb send, which a few recipes (the gunshot tails) feed directly. A rendered sound is the dry voice, as the prototype's goldens are
+        /// made; in the game the reverb comes from the mixer, at the sound's send level. So this leads nowhere.
+        /// </summary>
+        public readonly GainNode Send;
+
         public VoiceKit(SynthGraph graph, AudioNoiseBank noise, Rng graphRng)
         {
             Graph = graph ?? throw new ArgumentNullException(nameof(graph));
@@ -23,6 +29,7 @@ namespace Cypher.Core
             if (noise.SampleRate != graph.SampleRate) throw new ArgumentException("the noise beds are for another sample rate", nameof(noise));
             Input = graph.CreateGain(1);
             Input.Connect(graph.Destination);
+            Send = graph.CreateGain(1);
         }
 
         public int SampleRate => Graph.SampleRate;
@@ -48,6 +55,19 @@ namespace Cypher.Core
         }
 
         public GainNode Gain(double v = 1) => Graph.CreateGain(v);
+
+        /// <summary>The prototype's soft clipper: <c>(1 + a) x / (1 + a |x|)</c> over 1024 points, oversampled 2x as it asks.</summary>
+        public WaveShaperNode Shaper(double amount = 12)
+        {
+            const int n = 1024;
+            var curve = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                double x = (double)i / (n - 1) * 2 - 1;
+                curve[i] = (float)((1 + amount) * x / (1 + amount * Math.Abs(x)));
+            }
+            return Graph.CreateWaveShaper(curve, oversample2x: true);
+        }
 
         /// <summary>A filter; its frequency is held to the range the audio can carry.</summary>
         public BiquadNode Filter(BiquadType type, double freq, double q = 1, double gainDb = 0)

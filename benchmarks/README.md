@@ -10,6 +10,7 @@ sound's status lines every 15 s).
 | Folder | What it is |
 |---|---|
 | `gate-b-2026-10-23/` | Gate B, partial: the Street route (160 s, one lap), Development player, Medium and Ultra, one run each, everything on. `gate-b-table.txt` is the table `tools/gate-b.ps1` printed. |
+| `gate-c-2026-10-29/` | Gate C: Gate B's runs with the game (RPG, HUD, markers, a gun drawn) and the pilot firing bursts (`gate-b.ps1 -Fire`), Medium and Ultra, one run each. `gate-c-table.txt` is the table. |
 | `startup-hitches-2026-10-23/` | Four 4 s runs at Medium (centre route) with systems switched off in turn (`all-on`, `no-audio`, `audio-only`, `all-off`): where the stutter after New Game comes from. Read `warmup_hitches.csv` and the "started in" lines of `player.log`. |
 | `step12-audio-2026-10-23/` | The sound's cost, alternating runs with and without `--no-audio` (`*-audio`, `*-noaudio`), on the plaza loop (`centre-*`) and the city tour (`city-*`), Medium. `set-B-...` was before the compressor and oscillator loops were made cheaper, `set-C-...` after, with `probe1`/`probe2` (the main-thread breakdown) and `release1` (a non-Development player). The first set, from before the nearest-sign search had a grid, was not kept; its numbers are in `performance_results.md`. The per-frame csv files are left out. |
 

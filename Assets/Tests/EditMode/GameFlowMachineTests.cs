@@ -230,6 +230,35 @@ namespace Cypher.Tests
         public void UnknownStatesFailLoudly()
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => FlowPolicy.For((FlowState)99));
+            Assert.Throws<ArgumentOutOfRangeException>(() => FlowPolicy.For(FlowState.Playing, (FlowModal)99));
+        }
+
+        [Test]
+        public void AGameMenuStopsTheWorldAndAnInteractionOnlyStopsThePlayer()
+        {
+            FlowRules menu = FlowPolicy.For(FlowState.Playing, FlowModal.Menu);
+            Assert.AreEqual(0.0, menu.TimeScale);
+            Assert.IsFalse(menu.PlayerActive);
+            Assert.IsFalse(menu.CursorLocked, "the mouse is free to click the menu");
+            Assert.IsFalse(menu.AdaptiveQualityActive);
+
+            FlowRules talk = FlowPolicy.For(FlowState.Playing, FlowModal.Interaction);
+            Assert.AreEqual(1.0, talk.TimeScale, "a breach's timer runs");
+            Assert.IsFalse(talk.PlayerActive);
+            Assert.IsFalse(talk.CursorLocked);
+            Assert.IsFalse(talk.TitleCameraActive);
+
+            Assert.AreEqual(FlowPolicy.For(FlowState.Playing).TimeScale, FlowPolicy.For(FlowState.Playing, FlowModal.None).TimeScale);
+            Assert.IsTrue(FlowPolicy.For(FlowState.Playing, FlowModal.None).PlayerActive);
+            foreach (FlowState s in (FlowState[])Enum.GetValues(typeof(FlowState)))
+            {
+                if (s == FlowState.Playing) continue;
+                foreach (FlowModal m in (FlowModal[])Enum.GetValues(typeof(FlowModal)))
+                {
+                    FlowRules a = FlowPolicy.For(s), b = FlowPolicy.For(s, m);
+                    Assert.IsTrue(a.TimeScale == b.TimeScale && a.PlayerActive == b.PlayerActive && a.CursorLocked == b.CursorLocked, $"{m} means nothing in {s}");
+                }
+            }
         }
 
         [Test]

@@ -7,11 +7,14 @@ using System.Threading;
 using Cypher.Actors;
 using Cypher.Audio;
 using Cypher.City;
+using Cypher.Combat;
 using Cypher.Core;
 using Cypher.Game;
 using Cypher.Perf;
 using Cypher.Player;
 using Cypher.Rendering;
+using Cypher.Rpg;
+using Cypher.UI;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -31,7 +34,7 @@ namespace Cypher.Tests
         }
 
         [SetUp]
-        public void SetUp() => SliceTestScene.Isolate(audio: true);
+        public void SetUp() => SliceTestScene.Isolate(audio: true, saves: new MemorySaveStorage());
 
         [UnityTearDown]
         public IEnumerator TearDown()
@@ -44,6 +47,9 @@ namespace Cypher.Tests
         static AudioEngine Sound => UnityEngine.Object.FindFirstObjectByType<AudioEngine>();
         static QualityDirector Director => UnityEngine.Object.FindFirstObjectByType<QualityDirector>();
         static FirstPersonController Player => UnityEngine.Object.FindFirstObjectByType<FirstPersonController>();
+        static RpgService Rpg => UnityEngine.Object.FindFirstObjectByType<RpgService>();
+        static UiRoot Ui => UnityEngine.Object.FindFirstObjectByType<UiRoot>();
+        static WeaponSystem Guns => UnityEngine.Object.FindFirstObjectByType<WeaponSystem>();
 
         static IEnumerator Seconds(float s)
         {
@@ -89,6 +95,7 @@ namespace Cypher.Tests
                 ["Meshes"] = Resources.FindObjectsOfTypeAll<Mesh>().Length,
                 ["Materials"] = Resources.FindObjectsOfTypeAll<Material>().Length,
                 ["Textures"] = Resources.FindObjectsOfTypeAll<Texture>().Length,
+                ["UiElements"] = UnityEngine.UIElements.UQueryExtensions.Query<UnityEngine.UIElements.VisualElement>(Ui.Root).ToList().Count,
                 ["ManagedKB"] = GC.GetTotalMemory(true) / 1024,
             };
         }
@@ -98,7 +105,7 @@ namespace Cypher.Tests
         // ---------------------------------------------------------------- a session, again and again
 
         [UnityTest]
-        public IEnumerator AGameStartedAndEndedThreeTimesLeavesNothingBehind()
+        public IEnumerator AGameStartedAndEndedThreeTimesWithTheJobsTheMenusAndTheGunLeavesNothingBehind()
         {
             yield return ToTitle();
             Assert.IsFalse(Crowd.IsActive);
@@ -108,8 +115,11 @@ namespace Cypher.Tests
             var afterEach = new List<Dictionary<string, long>>();
             for (int game = 1; game <= 3; game++)
             {
-                Assert.IsTrue(SliceTestScene.Flow.NewGame(), "game " + game);
+                // the first game is new; the others Continue the save the one before made
+                Assert.IsTrue(game == 1 ? SliceTestScene.Flow.NewGame() : SliceTestScene.Flow.Continue(), "game " + game);
                 yield return Seconds(1.0f);
+                Assert.AreEqual(0, Guns.Effects.Live().Decals, "game " + game + ": no holes left from the game before");
+                IPlayerCommandSource own = Player.CommandSource;
                 WalkTheStreets();
                 yield return Seconds(7.0f);
                 Assert.IsTrue(Crowd.IsActive, "game " + game + ": people");
@@ -117,8 +127,10 @@ namespace Cypher.Tests
                 Assert.IsTrue(Sound.WorldRunning, "game " + game + ": sound");
                 Assert.Greater(Crowd.Sim.Active.Count, 0);
                 Assert.Greater(Traffic.Sim.Vehicles.Count, 0);
+                yield return PlayALittle(game, own);
 
                 Assert.IsTrue(SliceTestScene.Flow.Pause(), "game " + game);
+                Assert.IsNull(SliceTestScene.Flow.SaveGame(), "game " + game + " saves");
                 yield return Seconds(0.3f);
                 Assert.IsTrue(SliceTestScene.Flow.ReturnToTitle(), "game " + game);
                 yield return Seconds(3.0f);
@@ -126,6 +138,8 @@ namespace Cypher.Tests
                 Assert.IsFalse(Crowd.IsActive, "game " + game + ": the people are gone at the title");
                 Assert.IsFalse(Traffic.IsActive, "game " + game + ": the traffic is gone");
                 Assert.IsFalse(Sound.WorldRunning, "game " + game + ": the world's sound is gone");
+                Assert.IsNull(Rpg.Core, "game " + game + ": no RPG behind the title");
+                Assert.IsFalse(Guns.Drawn, "game " + game + ": the gun is put away");
                 Assert.IsNull(Sound.Master.Failure);
                 yield return Seconds(1.5f);   // the last menu sound and any tail
                 Assert.AreEqual(0, Sound.Voices.Active, "game " + game + ": every voice was given back");
@@ -139,6 +153,39 @@ namespace Cypher.Tests
                 Assert.AreEqual(afterEach[1][key], afterEach[2][key], $"{key} after the third game against the second ({Describe(afterEach[1])} / {Describe(afterEach[2])})");
             }
             Assert.Less(afterEach[2]["ManagedKB"] - afterEach[1]["ManagedKB"], 8 * 1024, "the managed heap grew by more than 8 MB over a game");
+        }
+
+        /// <summary>What a player does in a few seconds of a game: talk to Kaz and leave, open the menu on each tab and close it, fire a burst.</summary>
+        static IEnumerator PlayALittle(int game, IPlayerCommandSource own)
+        {
+            Player.CommandSource = own;   // the pilot stops walking
+            RpgLocation noodle = Rpg.Core.GetLocation("noodle");
+            Player.Teleport(new Vector3((float)noodle.X, Player.transform.position.y, (float)noodle.Z), 0f);
+            Physics.SyncTransforms();
+            yield return Seconds(0.2f);
+            Assert.IsTrue(Rpg.Core.Interact().Ok, "game " + game + ": Kaz talks");
+            yield return null;
+            Assert.AreEqual(UiScreen.Dialogue, Ui.Top);
+            Ui.OnBack(fromBButton: false);
+            yield return null;
+            foreach (MenuTab tab in new[] { MenuTab.Inventory, MenuTab.Character, MenuTab.Journal })
+            {
+                Ui.ToggleMenu(tab);
+                yield return Seconds(0.1f);
+                Assert.AreEqual(UiScreen.GameMenu, Ui.Top, $"game {game}: the {tab} tab");
+            }
+            Ui.ToggleMenu(MenuTab.Journal);
+            yield return null;
+            Assert.AreEqual(UiScreen.None, Ui.Top, "game " + game + ": the menu closed");
+            Player.Look.Set(Player.Look.Yaw, -0.5);
+            for (int i = 0; i < 30; i++)
+            {
+                Guns.Step(new WeaponInput { Acting = true, FireHeld = true }, new WeaponBody { Grounded = true });
+                yield return null;
+            }
+            Guns.Step(new WeaponInput { Acting = true }, new WeaponBody { Grounded = true });
+            Assert.Greater(Guns.Effects.Live().Decals, 0, "game " + game + ": the shots left holes");
+            yield return Seconds(1.0f);
         }
 
         // ---------------------------------------------------------------- the tier changes under it all

@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Cypher.Core;
 using Cypher.Game;
+using Cypher.Rpg;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -102,7 +104,7 @@ namespace Cypher.UI
 
             ui.Options.Controls.Button(GameAction.Jump, BindingSlot.Primary).Activate();
             yield return Settle();
-            PressVirtual(Key.J);
+            PressVirtual(Key.Y);   // a free key (J is the journal's, K the character sheet's)
             yield return WaitFor(() => ui.Top == UiScreen.Options, "the options after a rebind");
             ui.Options.Controls.Button(GameAction.Sprint, BindingSlot.Secondary).Activate();
             yield return Settle();
@@ -123,6 +125,7 @@ namespace Cypher.UI
             yield return WaitFor(() => flow.State == FlowState.Playing, "the game");
             yield return new WaitForSecondsRealtime(1.2f);
             yield return Shot("11_playing");
+            yield return HudShots();
             flow.Pause();
             yield return Shot("12_pause");
             ui.Pause.ReturnToTitle.Activate();
@@ -134,6 +137,178 @@ namespace Cypher.UI
 
             File.WriteAllText(Path.Combine(_options.Directory, "shots.txt"), _taken.ToString());
             Finish(0);
+        }
+
+        /// <summary>The HUD with notices and a hit, the way to the tracked job, the E prompt at the noodle bar, and a place's marker up close.</summary>
+        IEnumerator HudShots()
+        {
+            RpgService rpg = FindAnyObjectByType<RpgService>() ?? throw new InvalidOperationException("the shots need the RPG");
+            RpgCore core = rpg.Core;
+            Transform player = rpg.Player.transform;
+
+            void Stand(Vector3 at, double faceX, double faceZ)
+            {
+                float yaw = (float)(Math.Atan2(faceX - at.x, faceZ - at.z) * 180 / Math.PI);
+                rpg.Player.Teleport(at, yaw);
+                Physics.SyncTransforms();
+            }
+
+            core.AddMoney(250, "found");
+            core.AddXp(120, "shots");
+            core.GiveItem("c_maxdoc");
+            core.Damage(30);
+            yield return new WaitForSecondsRealtime(0.2f);
+            yield return Shot("11a_hud_notices");
+
+            JsonObject tracked = HudModel.TrackedMarker(core.Quests.Markers()) ?? throw new InvalidOperationException("a new game tracks the main job");
+            Stand(player.position, (double)tracked["x"], (double)tracked["z"]);
+            yield return new WaitForSecondsRealtime(0.6f);
+            yield return Shot("11b_hud_towards_job");
+
+            RpgLocation noodle = core.GetLocation("noodle");
+            float y = player.position.y + 0.3f;
+            Stand(new Vector3((float)noodle.X, y, (float)noodle.Z), noodle.X, noodle.Z + 10);
+            yield return new WaitForSecondsRealtime(0.6f);
+            yield return Shot("11c_hud_prompt");
+
+            RpgLocation plaza = core.GetLocation("plaza");
+            Vector3 back = new Vector3((float)(plaza.X - noodle.X), 0, (float)(plaza.Z - noodle.Z)).normalized * 14;
+            Stand(new Vector3((float)noodle.X + back.x, y, (float)noodle.Z + back.z), noodle.X, noodle.Z);
+            yield return new WaitForSecondsRealtime(0.6f);
+            yield return Shot("11d_marker_close");
+
+            // the scanner, held on the virtual keyboard
+            InputSystem.QueueStateEvent(_keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState(Key.F));
+            yield return new WaitForSecondsRealtime(1f);
+            yield return Shot("11e_scanner");
+            InputSystem.QueueStateEvent(_keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState());
+            yield return new WaitForSecondsRealtime(0.6f);
+
+            core.StartDialogue("dlg_kaz");
+            yield return null;
+            ui.Conversation.Skip();
+            yield return Shot("11f_conversation");
+            ((ChoiceButton)ui.Conversation.Buttons.First(b => b is ChoiceButton c && !c.Choice.Locked)).Activate();
+            yield return null;
+            ui.Conversation.Skip();
+            yield return Shot("11f2_conversation_answered");
+            ui.OnBack(fromBButton: false);
+            yield return Settle();
+
+            core.StartBreach("market_terminal");
+            yield return null;
+            GridCell first = core.Breach.S.SolutionPath[0], second = core.Breach.S.SolutionPath[1];
+            ui.Breach.Cells[first.R][first.C].Activate();
+            ui.Breach.Cells[second.R][second.C].Activate();
+            yield return Shot("11g_breach");
+            foreach (GridCell p in core.Breach.S.SolutionPath.Skip(2).ToList())
+            {
+                if (core.Breach.Done) break;
+                ui.Breach.Cells[p.R][p.C].Activate();
+            }
+            yield return new WaitForSecondsRealtime(0.4f);   // the outcome is up for a moment before the screen closes
+            yield return ShotNow("11g2_breach_complete");
+            yield return WaitFor(() => ui.Top == UiScreen.None, "the breach screen to close");
+            yield return Settle();
+
+            core.AddXp(5000);
+            core.GiveItem("w_pistol", "epic");
+            ui.ToggleMenu(MenuTab.Inventory);
+            yield return null;
+            var inventory = (InventoryPage)ui.Menu.Page(MenuTab.Inventory);
+            inventory.Tiles[inventory.Tiles.Count - 1].Focus();   // the new gun, compared with the worn one
+            yield return Shot("11h_inventory");
+            ui.ToggleMenu(MenuTab.Character);
+            yield return Shot("11i_character");
+            ui.ToggleMenu(MenuTab.Journal);
+            yield return Shot("11j_journal");
+            ui.OnBack(fromBButton: false);
+            yield return Settle();
+
+            core.OpenVendor("v_kaz");
+            yield return Shot("11k_vendor");
+            ui.OnBack(fromBButton: false);
+            yield return Settle();
+
+            yield return GunShots(rpg);
+        }
+
+        /// <summary>The guns: at the hip, firing down the plaza (the flash, tracers, sparks, holes in the ground), aimed, mid-reload, the revolver, the rail charging and firing.</summary>
+        IEnumerator GunShots(RpgService rpg)
+        {
+            var guns = FindAnyObjectByType<Cypher.Combat.WeaponSystem>() ?? throw new InvalidOperationException("the shots need the guns");
+            var still = new WeaponBody { Grounded = true };
+            RpgLocation plaza = rpg.Core.GetLocation("plaza"), noodle = rpg.Core.GetLocation("noodle");
+            float yaw = (float)(Math.Atan2(noodle.X - plaza.X, noodle.Z - plaza.Z) * 180 / Math.PI);
+            rpg.Player.Teleport(new Vector3((float)plaza.X, rpg.Player.transform.position.y + 0.3f, (float)plaza.Z), yaw);
+            rpg.Player.Look.Set(rpg.Player.Look.Yaw, -0.18);
+            Physics.SyncTransforms();
+            yield return new WaitForSecondsRealtime(1.0f);
+            yield return Shot("11l_gun_hip");
+
+            // one step a frame, as play would; the picture is taken in the frame of a shot, while its flash is up
+            for (int i = 0; i < 24; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true, FireHeld = true }, still);
+                yield return null;
+            }
+            guns.Step(new WeaponInput { Acting = true, FireHeld = true }, still);
+            yield return ShotNow("11m_gun_fire");
+            yield return new WaitForSecondsRealtime(0.6f);
+            yield return Shot("11n_gun_holes");
+
+            for (int i = 0; i < 40; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true, AimHeld = true }, still);
+                yield return null;
+            }
+            yield return ShotNow("11o_gun_ads");
+
+            guns.Step(new WeaponInput { Acting = true, ReloadPressed = true }, still);
+            for (int i = 0; i < 70; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true }, still);
+                if (i % 2 == 0) yield return null;
+            }
+            yield return ShotNow("11p_gun_reload");
+            for (int i = 0; i < 80; i++) guns.Step(new WeaponInput { Acting = true }, still);
+
+            guns.Step(new WeaponInput { Acting = true, Select = 2 }, still);
+            for (int i = 0; i < 50; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true }, still);
+                yield return null;
+            }
+            yield return Shot("11q_revolver");
+            guns.Step(new WeaponInput { Acting = true, FireHeld = true, FireClicked = true }, still);
+            yield return ShotNow("11r_revolver_fire");
+            yield return new WaitForSecondsRealtime(0.6f);
+
+            guns.Step(new WeaponInput { Acting = true, Select = 3 }, still);
+            for (int i = 0; i < 50; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true }, still);
+                yield return null;
+            }
+            for (int i = 0; i < 50; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true, FireHeld = true }, still);
+                yield return null;
+            }
+            yield return ShotNow("11s_rail_charged");
+            guns.Step(new WeaponInput { Acting = true }, still);
+            yield return ShotNow("11t_rail_fire");
+            yield return new WaitForSecondsRealtime(0.5f);
+        }
+
+        /// <summary>A picture this frame, without waiting for things to settle (a muzzle flash lasts a few frames).</summary>
+        IEnumerator ShotNow(string name)
+        {
+            string path = Path.Combine(_options.Directory, name + ".png");
+            ScreenCapture.CaptureScreenshot(path);
+            yield return null;
+            yield return null;
+            _taken.Append(name).Append(".png  ").Append(ui.Top).Append("  ").Append(Screen.width).Append('x').Append(Screen.height).AppendLine();
         }
 
         IEnumerator Settle() => new WaitForSecondsRealtime(SettleSeconds);

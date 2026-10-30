@@ -21,7 +21,7 @@ namespace Cypher.Tests
         [Test]
         public void PunctuationAndTheYenSignAreThere()
         {
-            foreach (char c in ".,:/-+%¥ ") Assert.IsTrue(StrokeFont.HasLatin(c), $"'{c}'");
+            foreach (char c in ".,:/-+%¥ '—&") Assert.IsTrue(StrokeFont.HasLatin(c), $"'{c}'");
             Assert.AreEqual(0, StrokeFont.LatinGlyph(' ').Strokes.Count, "a space draws nothing");
         }
 

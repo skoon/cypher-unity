@@ -15,7 +15,7 @@ namespace Cypher.Player
         public static readonly IReadOnlyList<GameAction> Actions = new[]
         {
             GameAction.Interact, GameAction.Scan, GameAction.Inventory, GameAction.Journal, GameAction.Fire, GameAction.Aim, GameAction.Reload,
-            GameAction.Weapon1, GameAction.Weapon2, GameAction.Weapon3,
+            GameAction.Weapon1, GameAction.Weapon2, GameAction.Weapon3, GameAction.Character,
         };
 
         readonly InputBindings _bindings;

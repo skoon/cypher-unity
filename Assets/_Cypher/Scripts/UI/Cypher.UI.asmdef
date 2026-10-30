@@ -4,6 +4,9 @@
     "references": [
         "Cypher.Core",
         "Cypher.Game",
+        "Cypher.Rpg",
+        "Cypher.Actors",
+        "Cypher.Combat",
         "Cypher.Player",
         "Cypher.Perf",
         "Unity.InputSystem"

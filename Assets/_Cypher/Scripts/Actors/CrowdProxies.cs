@@ -1,4 +1,5 @@
 using System;
+using Cypher.City;
 using Cypher.Core;
 using UnityEngine;
 
@@ -31,6 +32,7 @@ namespace Cypher.Actors
                 var body = go.AddComponent<Rigidbody>();
                 body.isKinematic = true;
                 body.useGravity = false;
+                go.AddComponent<ShotSurface>().Target = ShotTarget.Person;   // a shot that hits it is marked as a hit on a person
                 var capsule = go.AddComponent<CapsuleCollider>();
                 capsule.radius = Radius;
                 capsule.height = Height;

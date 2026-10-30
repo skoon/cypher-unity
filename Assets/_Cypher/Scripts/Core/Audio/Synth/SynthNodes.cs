@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 
 namespace Cypher.Core
@@ -60,6 +61,141 @@ namespace Cypher.Core
                 float[] g = Gain.Values;
                 for (int i = 0; i < n; i++) output[i] = input[i] * g[i];
             }
+        }
+    }
+
+    /// <summary>
+    /// A wave shaper: each sample looked up in a curve (the Web Audio spec's lookup with linear interpolation between points, inputs past the ends held at
+    /// the ends), optionally at twice the sample rate as Chromium does it for <c>oversample = '2x'</c>: up-sampled by a 128-tap Blackman-windowed sinc at a
+    /// half-sample offset (the even samples are the input, delayed to the kernel's centre), shaped, and down-sampled by a 256-tap half-band windowed sinc, so
+    /// what the curve folds back above the Nyquist frequency is filtered out. The two filters delay the output by 128 frames, as Chromium's do. The kernels
+    /// follow the design of Chromium's UpSampler and DownSampler; the result is checked against Chromium by level.
+    /// </summary>
+    public sealed class WaveShaperNode : SynthNode
+    {
+        const int UpTaps = 128, DownTaps = 256;
+        static readonly double[] UpKernel = MakeUp(), DownKernel = MakeDown();
+
+        readonly float[] _curve;
+        readonly bool _oversample;
+        // the input's past (for the up-sampler) and the shaped 2x signal's past (for the down-sampler), as rings
+        readonly double[] _inHistory = new double[UpTaps];
+        readonly double[] _upHistory = new double[DownTaps];
+        int _inPos, _upPos;
+
+        public IReadOnlyList<float> Curve => _curve;
+
+        internal WaveShaperNode(SynthGraph graph, float[] curve, bool oversample) : base(graph)
+        {
+            if (curve == null || curve.Length < 2) throw new ArgumentException("a shaping curve needs at least two points", nameof(curve));
+            _curve = (float[])curve.Clone();
+            _oversample = oversample;
+        }
+
+        /// <summary>Frames of delay the oversampling adds.</summary>
+        public int LatencyFrames => _oversample ? UpTaps / 2 + DownTaps / 4 : 0;
+
+        static double Blackman(double x)
+        {
+            const double alpha = 0.16;
+            double a0 = 0.5 * (1 - alpha), a1 = 0.5, a2 = 0.5 * alpha;
+            return a0 - a1 * Math.Cos(2 * Math.PI * x) + a2 * Math.Cos(4 * Math.PI * x);
+        }
+
+        static double[] MakeUp()
+        {
+            var k = new double[UpTaps];
+            int half = UpTaps / 2;
+            const double offset = -0.5;
+            for (int i = 0; i < UpTaps; i++)
+            {
+                double s = Math.PI * (i - half - offset);
+                double sinc = s == 0 ? 1 : Math.Sin(s) / s;
+                k[i] = sinc * Blackman((i - offset) / UpTaps);
+            }
+            return k;
+        }
+
+        static double[] MakeDown()
+        {
+            var k = new double[DownTaps];
+            int half = DownTaps / 2;
+            for (int i = 0; i < DownTaps; i++)
+            {
+                double s = 0.5 * Math.PI * (i - half);
+                double sinc = (s == 0 ? 1 : Math.Sin(s) / s) * 0.5;
+                k[i] = sinc * Blackman((double)i / DownTaps);
+            }
+            return k;
+        }
+
+        internal override void Process(int n)
+        {
+            if (Inputs.Count == 0 && !_oversample)
+            {
+                Array.Clear(Out0, 0, n);
+                if (OutChannels == 2) Array.Clear(Out1, 0, n);
+                return;
+            }
+            if (Inputs.Count == 0) ClearInput(n);
+            else SumInputs(n);
+            if (_oversample)
+            {
+                // the filters keep one channel of state: the shaper is used on mono voices
+                Oversampled(In0, Out0, n);
+                if (OutChannels == 2) Array.Copy(Out0, Out1, n);
+                return;
+            }
+            Shape(In0, Out0, n);
+            if (OutChannels == 2) Shape(In1, Out1, n);
+        }
+
+        double Lookup(double x)
+        {
+            int last = _curve.Length - 1;
+            double v = last * 0.5 * (x + 1.0);
+            if (v <= 0) return _curve[0];
+            if (v >= last) return _curve[last];
+            int k = (int)v;
+            double f = v - k;
+            return (1 - f) * _curve[k] + f * _curve[k + 1];
+        }
+
+        void Shape(float[] input, float[] output, int n)
+        {
+            for (int i = 0; i < n; i++) output[i] = (float)Lookup(input[i]);
+        }
+
+        void Oversampled(float[] input, float[] output, int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                _inHistory[_inPos] = input[i];
+                // even: the input, delayed to the up kernel's centre; odd: the kernel's interpolation half a sample on
+                double even = _inHistory[(_inPos - UpTaps / 2 + UpTaps * 2) % UpTaps];
+                double odd = 0;
+                for (int k = 0; k < UpTaps; k++) odd += UpKernel[k] * _inHistory[(_inPos - k + UpTaps) % UpTaps];
+                _inPos = (_inPos + 1) % UpTaps;
+
+                PushUp(Lookup(even));
+                PushUp(Lookup(odd));
+
+                // down: the half-band kernel over the shaped 2x signal, read at every other sample
+                double acc = 0;
+                for (int k = 0; k < DownTaps; k++)
+                {
+                    double w = DownKernel[k];
+                    if (w == 0) continue;
+                    acc += w * _upHistory[(_upPos - 1 - k + DownTaps * 2) % DownTaps];
+                }
+                output[i] = (float)acc;
+            }
+        }
+
+        void PushUp(double v)
+        {
+            _upHistory[_upPos] = v;
+            _upPos = (_upPos + 1) % DownTaps;
         }
     }
 

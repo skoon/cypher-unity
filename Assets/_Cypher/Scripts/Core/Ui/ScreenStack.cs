@@ -19,6 +19,18 @@ namespace Cypher.Core
 
         /// <summary>The chosen control belongs to another action: swap or cancel.</summary>
         Conflict,
+
+        /// <summary>The game's menu over play: inventory, character and journal as tabs.</summary>
+        GameMenu,
+
+        /// <summary>Trading with a vendor.</summary>
+        Vendor,
+
+        /// <summary>A conversation.</summary>
+        Dialogue,
+
+        /// <summary>The breach minigame.</summary>
+        Breach,
     }
 
     public enum BackResult
@@ -31,7 +43,7 @@ namespace Cypher.Core
 
     /// <summary>
     /// Which menu screen is showing. The bottom of the stack follows the game flow (Loading, Title, Pause, or nothing while playing);
-    /// Options and the dialogs open on top of it. Pure, so the rules, above all what Esc does in each situation, are tested.
+    /// Options and the dialogs open on top of it, and the game's own screens (menu, vendor, conversation, breach) over play. Pure, so the rules, above all what Esc does in each situation, are tested.
     /// A change of flow state closes whatever was open.
     /// </summary>
     public sealed class ScreenStack
@@ -78,6 +90,10 @@ namespace Cypher.Core
                 case UiScreen.ConfirmTitle: return top == UiScreen.Pause;
                 case UiScreen.Rebind: return top == UiScreen.Options;
                 case UiScreen.Conflict: return top == UiScreen.Rebind;
+                case UiScreen.GameMenu:
+                case UiScreen.Vendor:
+                case UiScreen.Dialogue:
+                case UiScreen.Breach: return top == UiScreen.None;   // only over play, one at a time
                 default: return false;   // None, Loading, Title and Pause come from the flow, not from the stack
             }
         }

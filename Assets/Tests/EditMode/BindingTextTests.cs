@@ -13,6 +13,7 @@ namespace Cypher.Tests
         [TestCase("<Keyboard>/numpad5", "Numpad 5")]
         [TestCase("<Keyboard>/numpadEnter", "Numpad Enter")]
         [TestCase("<Keyboard>/digit3", "3")]
+        [TestCase("<Keyboard>/3", "3")]
         [TestCase("<Keyboard>/f3", "F3")]
         [TestCase("<Keyboard>/f12", "F12")]
         [TestCase("<Keyboard>/capsLock", "Caps Lock")]

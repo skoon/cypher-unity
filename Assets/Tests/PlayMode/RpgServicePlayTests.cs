@@ -118,7 +118,9 @@ namespace Cypher.Tests
                 yield return null;
                 Assert.IsTrue(Rpg.Core.Dialogue.Active, "E starts the conversation");
                 Assert.AreEqual("dlg_kaz", Rpg.Core.Dialogue.GraphId);
-                Rpg.Core.EndDialogue();
+                Object.FindAnyObjectByType<UiRoot>().OnBack(fromBButton: false);   // leave the conversation as the player does
+                yield return null;
+                Assert.IsFalse(Rpg.Core.Dialogue.Active);
 
                 SettingsService settings = Object.FindAnyObjectByType<SettingsService>();
                 Assert.AreEqual(AssignOutcome.Applied, settings.Bindings.Assign(GameAction.Interact, BindingSlot.Primary, "<Keyboard>/g").Outcome);

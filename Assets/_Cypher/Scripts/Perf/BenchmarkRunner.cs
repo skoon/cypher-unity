@@ -128,7 +128,7 @@ namespace Cypher.Perf
             TryMakePilot();
 
             State = Phase.Warmup;
-            Debug.Log($"[Cypher] benchmark: {_options.Route} route, {_options.WarmupSeconds:0.#} s warm-up, then {_options.DurationSeconds:0.#} s recorded, results in {_outputDirectory}");
+            Debug.Log($"[Cypher] benchmark: {_options.Route} route{(_options.Fire ? ", firing" : "")}, {_options.WarmupSeconds:0.#} s warm-up, then {_options.DurationSeconds:0.#} s recorded, results in {_outputDirectory}");
         }
 
         /// <summary>
@@ -328,6 +328,7 @@ namespace Cypher.Perf
                 Pair("city_build_ms", city != null ? city.BuildMilliseconds.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) : "n/a"),
                 Pair("launch_to_play_s", _firstFrameAt.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
                 Pair("route", _options.Route.ToString().ToLowerInvariant()),
+                Pair("fire", _options.Fire ? $"bursts, {BenchmarkFire.Burst:0} s of every {BenchmarkFire.Period:0} s" : "off"),
                 Pair("warmup_s", _options.WarmupSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)),
                 Pair("route_laps", _pilot.Laps.ToString()),
                 Pair("route_waypoints_reached", _pilot.WaypointsReached.ToString()),

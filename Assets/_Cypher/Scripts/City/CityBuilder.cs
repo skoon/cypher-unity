@@ -512,6 +512,7 @@ namespace Cypher.City
                 go.transform.localPosition = new Vector3((float)b.Cx, (float)b.Cy, (float)b.Cz);
                 go.transform.localRotation = Quaternion.Euler(0f, (float)(b.Yaw * 180.0 / Math.PI), 0f);   // +Z toward +X for a positive yaw, as in Core
                 go.AddComponent<BoxCollider>().size = new Vector3((float)(b.Hx * 2), (float)(b.Hy * 2), (float)(b.Hz * 2));
+                go.AddComponent<ShotSurface>().Target = ShotTarget.Prop;
                 PropColliderCount++;
             }
         }

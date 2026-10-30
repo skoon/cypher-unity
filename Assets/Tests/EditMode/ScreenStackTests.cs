@@ -205,5 +205,37 @@ namespace Cypher.Tests
             Assert.AreEqual(BackResult.ClosedOverlay, s.Back());
             Assert.AreEqual(BackResult.Resume, s.Back());
         }
-    }
+    
+        static readonly UiScreen[] GameScreens = { UiScreen.GameMenu, UiScreen.Vendor, UiScreen.Dialogue, UiScreen.Breach };
+
+        [Test]
+        public void TheGamesScreensOpenOnlyOverPlayAndOneAtATime()
+        {
+            foreach (UiScreen g in GameScreens)
+            {
+                Assert.IsTrue(In(FlowState.Playing).CanPush(g), g + " over play");
+                foreach (FlowState f in new[] { FlowState.Boot, FlowState.Loading, FlowState.Title, FlowState.Paused })
+                {
+                    Assert.IsFalse(In(f).CanPush(g), $"{g} in {f}");
+                }
+                ScreenStack s = In(FlowState.Playing);
+                Assert.IsTrue(s.TryPush(g));
+                foreach (UiScreen other in GameScreens) Assert.IsFalse(s.CanPush(other), $"{other} over {g}");
+                Assert.IsFalse(s.CanPush(UiScreen.Options), "the options belong to the pause menu");
+            }
+        }
+
+        [Test]
+        public void BackClosesAGameScreenAndDoesNotPause()
+        {
+            foreach (UiScreen g in GameScreens)
+            {
+                ScreenStack s = In(FlowState.Playing);
+                s.TryPush(g);
+                Assert.AreEqual(BackResult.ClosedOverlay, s.Back());
+                Assert.AreEqual(UiScreen.None, s.Top);
+                Assert.AreEqual(BackResult.Pause, s.Back(), "the next Back pauses");
+            }
+        }
+}
 }

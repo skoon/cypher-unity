@@ -193,6 +193,8 @@ namespace Cypher.Core
 
         public GainNode CreateGain(double gain = 1) => new GainNode(this, gain);
 
+        public WaveShaperNode CreateWaveShaper(float[] curve, bool oversample2x = false) => new WaveShaperNode(this, curve, oversample2x);
+
         public OscillatorNode CreateOscillator(WaveKind kind = WaveKind.Sine, double frequency = 440) => new OscillatorNode(this, kind, frequency);
 
         public BufferSourceNode CreateBufferSource(float[] data) => new BufferSourceNode(this, data);
