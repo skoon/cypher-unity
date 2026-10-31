@@ -9,6 +9,7 @@
   <Project Path="Cypher.Combat.csproj" />
   <Project Path="Cypher.Actors.csproj" />
   <Project Path="Cypher.City.csproj" />
+  <Project Path="Cypher.Fight.csproj" />
   <Project Path="Cypher.Editor.csproj" />
   <Project Path="Cypher.Rpg.csproj" />
   <Project Path="Assembly-CSharp.csproj" />

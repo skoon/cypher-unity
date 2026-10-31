@@ -59,6 +59,9 @@ Shader "Cypher/PedestrianBlob"
                 // a person under an umbrella casts a wider shadow
                 float size = (((p.extra.y & PED_FLAG_UMBRELLA) != 0u) ? 1.5 : 0.95) * p.b.z;
                 float3 positionWS = float3(p.a.x + input.positionOS.x * size, p.a.y + 0.016, p.a.z + input.positionOS.z * size);
+                // a fighter lying dead is a body length back from its feet: the shadow goes with the body
+                float fall = saturate(p.d.z) * saturate(p.d.z);
+                positionWS.xz -= float2(sin(p.a.w), cos(p.a.w)) * (0.85 * p.b.z * fall);
 
                 Varyings output;
                 output.positionCS = TransformWorldToHClip(positionWS);

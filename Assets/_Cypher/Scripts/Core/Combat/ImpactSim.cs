@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Cypher.Core
 {
     /// <summary>What a shot struck, as the game knows it.</summary>
-    public enum ShotTarget { World, Prop, Person, Vehicle }
+    public enum ShotTarget { World, Prop, Person, Vehicle, Enemy }
 
     /// <summary>The look of an impact (the prototype's <c>SURFACE_FX</c> keys).</summary>
     public enum ImpactSurface { Concrete, Asphalt, Metal, Energy, Flesh }
@@ -164,7 +164,7 @@ namespace Cypher.Core
         /// <summary>What a hit looks like (the prototype's choice): a person bleeds, the rail's shots are energy, props and cars ring as metal, a hit low on a flat surface is asphalt, the rest is concrete.</summary>
         public static ImpactSurface SurfaceFor(ShotTarget target, bool chargeGun, double normalY, double pointY)
         {
-            if (target == ShotTarget.Person) return ImpactSurface.Flesh;
+            if (target == ShotTarget.Person || target == ShotTarget.Enemy) return ImpactSurface.Flesh;
             if (chargeGun) return ImpactSurface.Energy;
             if (target == ShotTarget.Prop || target == ShotTarget.Vehicle) return ImpactSurface.Metal;
             return normalY > 0.6 && pointY < 0.8 ? ImpactSurface.Asphalt : ImpactSurface.Concrete;

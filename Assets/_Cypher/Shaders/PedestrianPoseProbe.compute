@@ -21,7 +21,7 @@ void Pose(uint3 id : SV_DispatchThreadID)
 
     PedInstance p = _Peds[ped];
     uint part = (uint)(_Vertices[vertex].w + 0.5);
-    bool worn = PedWorn(part, p.extra.y);
+    bool worn = PedWorn(part, p);
     float3 world = PedPoseVertex(part, _Vertices[vertex].xyz, p, _Time);
     _Out[i] = float4(world, worn ? 1.0 : 0.0);
 }

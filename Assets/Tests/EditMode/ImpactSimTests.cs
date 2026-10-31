@@ -15,6 +15,7 @@ namespace Cypher.Tests
         public void TheSurfaceFollowsWhatWasHitAndHowTheRailShoots()
         {
             Assert.AreEqual(ImpactSurface.Flesh, ImpactSim.SurfaceFor(ShotTarget.Person, true, 0, 1));
+            Assert.AreEqual(ImpactSurface.Flesh, ImpactSim.SurfaceFor(ShotTarget.Enemy, false, 0, 1));
             Assert.AreEqual(ImpactSurface.Energy, ImpactSim.SurfaceFor(ShotTarget.World, true, 1, 0));
             Assert.AreEqual(ImpactSurface.Metal, ImpactSim.SurfaceFor(ShotTarget.Prop, false, 0, 1));
             Assert.AreEqual(ImpactSurface.Metal, ImpactSim.SurfaceFor(ShotTarget.Vehicle, false, 0, 1));

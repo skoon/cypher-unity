@@ -9,7 +9,8 @@
         "Cypher.Combat",
         "Cypher.Player",
         "Cypher.Perf",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Cypher.Fight"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

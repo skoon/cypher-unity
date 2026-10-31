@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using Cypher.City;
 using Cypher.Core;
@@ -98,6 +100,76 @@ namespace Cypher.Rpg
             _core = null;
         }
 
+        // ------------------------------------------------------------ combat
+
+        /// <summary>An enemy of this kind died to the player at a place: its XP, cred and loot, and the kill counted for jobs by <paramref name="tag"/>.</summary>
+        public void Kill(EnemyArchetype enemy, string tag, Vector3 at)
+        {
+            if (enemy == null) throw new ArgumentNullException(nameof(enemy));
+            if (_core == null) throw new InvalidOperationException("A kill with no game running.");
+            _core.CombatKill(enemy.Xp, enemy.Cred, tag, enemy.LootTier, new JsonObject { ["x"] = (double)at.x, ["y"] = (double)at.y, ["z"] = (double)at.z });
+        }
+
+        /// <summary>The player was hit for this much (before armour) by <paramref name="source"/>; the player's health after.</summary>
+        public double HurtPlayer(double amount, string source)
+        {
+            if (_core == null) throw new InvalidOperationException("A hit on the player with no game running.");
+            return _core.PlayerDamage(amount, source);
+        }
+
+        /// <summary>The player flatlined: the Trauma Team bills them (<see cref="RpgCore.TraumaTeam"/>) and leaves them at Doc Vey's. Returns the fee.</summary>
+        public int TraumaTeam()
+        {
+            if (_core == null) throw new InvalidOperationException("No game running.");
+            int fee = _core.TraumaTeam();
+            RpgLocation clinic = _core.GetLocation(RpgCore.TraumaTeamLocation);
+            player.Teleport(new Vector3((float)clinic.X, (float)clinic.Y, (float)clinic.Z), (float)(player.Look.Yaw * Mathf.Rad2Deg));
+            Physics.SyncTransforms();
+            return fee;
+        }
+
+        /// <summary>Whether the save says an encounter was cleared, and marking one cleared (kept in the save's flags).</summary>
+        public bool EncounterCleared(string id) => _core != null && _core.GetFlag(EncounterFlag(id)) is bool b && b;
+
+        public void ClearEncounter(string id)
+        {
+            if (_core == null) throw new InvalidOperationException("No game running.");
+            _core.SetFlag(EncounterFlag(id), true);
+        }
+
+        public static string EncounterFlag(string id) => "encounter.cleared." + id;
+
+        /// <summary>Which of an encounter's people (by index) the save says are down for good, and marking one down (a flag holding the indices, "0,3").</summary>
+        public IEnumerable<int> EncounterDown(string id)
+        {
+            if (_core == null) throw new InvalidOperationException("No game running.");
+            if (!(_core.GetFlag(EncounterDownFlag(id)) is string list) || list.Length == 0) return Array.Empty<int>();
+            return list.Split(',').Select(i => int.Parse(i, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+        }
+
+        public void MarkEncounterDown(string id, int member)
+        {
+            if (_core == null) throw new InvalidOperationException("No game running.");
+            List<int> down = EncounterDown(id).ToList();
+            if (down.Contains(member)) return;
+            down.Add(member);
+            down.Sort();
+            _core.SetFlag(EncounterDownFlag(id), string.Join(",", down));
+        }
+
+        public static string EncounterDownFlag(string id) => "encounter.down." + id;
+
+        /// <summary>The player's numbers that change what a shot does, as the RPG derives them now.</summary>
+        public ShooterStats Shooter
+        {
+            get
+            {
+                if (_core == null) throw new InvalidOperationException("No game running.");
+                DerivedStats d = _core.Derived;
+                return new ShooterStats(d["rangedDamage"], d["critChance"], d["critDamage"]);
+            }
+        }
+
         // ------------------------------------------------------------ saving
 
         public bool HasSave => _storage != null && _storage.GetItem(RpgSave.KeyPrefix + Slot) != null;
@@ -140,7 +212,7 @@ namespace Cypher.Rpg
         {
             if (city.Slice == null) throw new InvalidOperationException("the RPG needs the city to be built first");
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            _core = new RpgCore(Forward, Seed, _storage, Now);
+            _core = new RpgCore(Forward, Seed, _storage, Now, RpgGameContent.Quests, RpgGameContent.Dialogues);
             _core.CaptureWorld = CaptureWorld;
             CityMeta = CityMeta ?? RpgCityMeta.From(city.Slice.Plan);
             _core.SetCity(CityMeta);

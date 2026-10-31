@@ -15,7 +15,8 @@
         "Cypher.UI",
         "Cypher.Combat",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Cypher.Fight"
     ],
     "includePlatforms": [
         "Editor"

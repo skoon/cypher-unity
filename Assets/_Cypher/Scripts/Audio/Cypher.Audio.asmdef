@@ -9,7 +9,8 @@
         "Cypher.Rendering",
         "Cypher.UI",
         "Cypher.Actors",
-        "Cypher.Combat"
+        "Cypher.Combat",
+        "Cypher.Fight"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

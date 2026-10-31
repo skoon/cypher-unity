@@ -768,15 +768,23 @@ namespace Cypher.Core
             }
         }
 
+        /// <summary>The RAM an upload costs less now (the ICEPICK daemon's discount), or 0.</summary>
+        public double HackDiscount
+        {
+            get
+            {
+                RpgBuff icepick = _buffs.Find(b => b.Id == "icepick");
+                return icepick != null && icepick.Data.TryGetValue("discount", out object dv) && dv is double dd ? dd : 0;
+            }
+        }
+
         /// <summary>Upload the quickhack in deck slot <paramref name="index"/> onto a target.</summary>
         public RpgResult UploadQuickhack(int index, string targetId)
         {
             Item[] deck = Inventory.DeckItems();
             Item item = index >= 0 && index < deck.Length ? deck[index] : null;
             if (item == null) return RpgResult.Fail("empty-slot");
-            RpgBuff icepick = _buffs.Find(b => b.Id == "icepick");
-            double discount = icepick != null && icepick.Data.TryGetValue("discount", out object dv) && dv is double dd ? dd : 0;
-            var res = Deck.Upload(item, targetId, Derived["hackDuration"], discount);
+            var res = Deck.Upload(item, targetId, Derived["hackDuration"], HackDiscount);
             if (!res.Ok)
             {
                 if (res.Reason == "no-ram") Notify("Not enough RAM", "bad");
@@ -817,6 +825,45 @@ namespace Cypher.Core
             Emit("rpg:damaged", new JsonObject { ["amount"] = mitigated, ["raw"] = amount, ["health"] = Health, ["source"] = source });
             if (Health <= 0) Emit("rpg:playerDied", new JsonObject { ["source"] = source });
             return Health;
+        }
+
+        /// <summary>
+        /// A kill (the prototype's documented <c>combat:kill</c>, which nothing in it ever sent): XP from combat (45 unless told), street cred if any, the kill counted for
+        /// jobs by its tag, and a loot drop of the given tier picked up at once.
+        /// </summary>
+        public void CombatKill(double? xp = null, double? cred = null, string tag = null, double? tier = null, JsonObject position = null)
+        {
+            AddXp(xp ?? 45, "combat");
+            if (cred.HasValue && cred.Value != 0) AddCred(cred.Value);
+            if (!string.IsNullOrEmpty(tag)) NotifyKill(tag, 1);
+            DropLoot(tier: tier ?? 1, source: "kill", position: position);
+        }
+
+        /// <summary>A hit on the player (the prototype's documented <c>player:damage</c>): 10 unless told, through <see cref="Damage"/> and the player's armour.</summary>
+        public double PlayerDamage(double? amount = null, string source = null) => Damage(amount ?? 10, source ?? "world");
+
+        /// <summary>The Trauma Team's bill: this share of the eddies, rounded down.</summary>
+        public const double TraumaTeamShare = 0.10;
+
+        /// <summary>Where the Trauma Team leaves a patched-up player: Doc Vey's clinic.</summary>
+        public const string TraumaTeamLocation = "ripperdoc";
+
+        /// <summary>
+        /// The player flatlined (health 0) and the Trauma Team came (the user's M5 choice): they bill a tenth of the eddies and patch the player up to full health;
+        /// jobs keep their progress. The game moves the player to <see cref="TraumaTeamLocation"/>. Returns the fee.
+        /// </summary>
+        public int TraumaTeam()
+        {
+            if (Health > 0) throw new InvalidOperationException("the Trauma Team only comes for the flatlined");
+            int fee = (int)Math.Floor(Money * TraumaTeamShare);
+            if (fee > 0)
+            {
+                RpgResult paid = Economy.AddMoney(-fee, "trauma team");
+                if (!paid.Ok) throw new InvalidOperationException($"the Trauma Team's fee of {fee} could not be taken ({paid.Reason})");
+            }
+            Health = Derived["maxHealth"];
+            Emit("rpg:traumaTeam", new JsonObject { ["fee"] = (double)fee, ["location"] = TraumaTeamLocation, ["health"] = Health });
+            return fee;
         }
 
         public double Heal(double amount)
@@ -906,6 +953,7 @@ namespace Cypher.Core
             foreach (BreachTarget t in RpgHacking.Targets)
             {
                 if (t.LocationKey == locationKey && wanted.Contains(t.Id)) return ("breach", t.Id, $"Breach {t.Name}");
+                if (t.LocationKey == locationKey && _waitingHacks.Contains(t.Id)) return null;   // a job will breach it once its other objectives are done (the guards first)
             }
             int i = Interactions.FindIndex(x => x.Key == locationKey);
             return i < 0 ? ((string, string, string)?)null : (Interactions[i].Kind, Interactions[i].Id, Interactions[i].Label);
@@ -943,7 +991,7 @@ namespace Cypher.Core
         (int Core, int Quests) _viewsAt = (-1, -1);
         List<JsonObject> _jobMarkers;
         JsonObject _trackedJob;
-        HashSet<string> _openHacks;
+        HashSet<string> _openHacks, _waitingHacks;
 
         void RefreshViews()
         {
@@ -953,6 +1001,7 @@ namespace Cypher.Core
             _jobMarkers = Quests.Markers();
             _trackedJob = Quests.Tracked != null ? Quests.Snapshot(Quests.Tracked) : null;
             _openHacks = Quests.OpenHackTargets();
+            _waitingHacks = Quests.WaitingHackTargets();
         }
 
         /// <summary>The job markers (<see cref="QuestLog.Markers"/>) as of the last change, built once and shared: for views that read them every frame. Read only.</summary>

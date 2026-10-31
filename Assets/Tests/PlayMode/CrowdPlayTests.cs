@@ -266,11 +266,14 @@ namespace Cypher.Tests
                 case RigPart.ShinL: return r.ShinL;
                 case RigPart.ThighR: return r.ThighR;
                 case RigPart.ShinR: return r.ShinR;
+                case RigPart.GunSmg:
+                case RigPart.GunRevolver: return r.Gun;
+                case RigPart.Visor: return r.Visor;
                 default: throw new ArgumentException(part.ToString());
             }
         }
 
-        static bool Worn(RigPart part, PedestrianAppearance a)
+        static bool Worn(RigPart part, PoseInput a)
         {
             switch (part)
             {
@@ -280,6 +283,9 @@ namespace Cypher.Tests
                 case RigPart.Hood: return a.Hood;
                 case RigPart.Umbrella: return a.Umbrella;
                 case RigPart.Pack: return a.Pack;
+                case RigPart.GunSmg: return a.Weapon == HeldWeapon.Smg;
+                case RigPart.GunRevolver: return a.Weapon == HeldWeapon.Revolver;
+                case RigPart.Visor: return a.Visor;
                 default: return true;
             }
         }
@@ -308,6 +314,19 @@ namespace Cypher.Tests
                     Speed = speeds[k % 5], Scale = a.Scale, Build = a.Build, LongCoat = a.LongCoat, Hood = a.Hood, Pack = a.Pack, Umbrella = a.Umbrella, Trim = a.Trim,
                     LookSeed = sim.Pool[k].LookSeed, LookYaw = 0.1, Near = false, Time = time,
                 };
+                if (k % 2 == 1)
+                {
+                    // half of them armed, in every part of the fighters' poses
+                    poses[k].Weapon = k % 4 == 1 ? HeldWeapon.Smg : HeldWeapon.Revolver;
+                    poses[k].Visor = true;
+                    poses[k].Aim = (k % 7) / 6.0;
+                    poses[k].AimPitch = (k % 5 - 2) * 0.15;
+                    poses[k].Crouch = k % 8 == 1 ? 0.7 : k % 8 == 5 ? 1 : 0;
+                    poses[k].Death = k % 6 == 3 ? (k % 11) / 10.0 : 0;
+                    poses[k].Recoil = (k % 3) / 2.0;
+                    poses[k].Flinch = (k % 9) / 8.0;
+                    poses[k].Side = k % 10 < 5 ? -0.7 : 0.9;
+                }
                 results[k] = PedestrianPose.Pose(poses[k]);
                 instances[k] = new PedestrianGpuData
                 {
@@ -315,7 +334,10 @@ namespace Cypher.Tests
                     Phase = (float)poses[k].Phase, Speed = (float)poses[k].Speed, Scale = (float)a.Scale, Build = (float)a.Build,
                     LookYaw = (float)results[k].LookYaw, LookSeed = (float)sim.Pool[k].LookSeed,
                     Flags = (a.LongCoat ? PedestrianGpuData.FlagLongCoat : 0u) | (a.Umbrella ? PedestrianGpuData.FlagUmbrella : 0u) | (a.Hood ? PedestrianGpuData.FlagHood : 0u)
-                        | (a.Pack ? PedestrianGpuData.FlagPack : 0u) | (a.Trim ? PedestrianGpuData.FlagTrim : 0u),
+                        | (a.Pack ? PedestrianGpuData.FlagPack : 0u) | (a.Trim ? PedestrianGpuData.FlagTrim : 0u) | (poses[k].Visor ? PedestrianGpuData.FlagVisor : 0u),
+                    Aim = (float)poses[k].Aim, Weapon = (uint)poses[k].Weapon,
+                    AimPitch = (float)poses[k].AimPitch, Crouch = (float)poses[k].Crouch, Death = (float)poses[k].Death, Recoil = (float)poses[k].Recoil,
+                    Flinch = (float)poses[k].Flinch, Side = (float)poses[k].Side,
                 };
             }
 
@@ -349,12 +371,12 @@ namespace Cypher.Tests
                         {
                             var part = (RigPart)(int)(vertices[v].w + 0.5f);
                             Vector4 got = gpu[k * vertices.Length + v];
-                            bool worn = part == RigPart.Static || Worn(part, a);
+                            bool worn = part == RigPart.Static || Worn(part, poses[k]);
                             Assert.AreEqual(worn ? 1f : 0f, got.w, $"{lod} state {k} vertex {v} ({part}): worn");
                             if (!worn) continue;
 
                             Mat4 m = part == RigPart.Static
-                                ? PedestrianPose.StaticBody(poses[k].X, poses[k].Y, poses[k].Z, poses[k].Heading, a.Scale, a.Build)
+                                ? PedestrianPose.StaticBody(poses[k].X, poses[k].Y, poses[k].Z, poses[k].Heading, a.Scale, a.Build, poses[k].Crouch, poses[k].Death)
                                 : MatrixFor(results[k], part);
                             var expected = m.Transform(vertices[v].x, vertices[v].y, vertices[v].z);
                             double e = Math.Max(Math.Abs(expected.X - got.x), Math.Max(Math.Abs(expected.Y - got.y), Math.Abs(expected.Z - got.z)));

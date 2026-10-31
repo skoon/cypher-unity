@@ -31,6 +31,7 @@ namespace Cypher.UI
         [SerializeField] Cypher.Actors.CrowdController crowd;
         [SerializeField] Cypher.Actors.TrafficController traffic;
         [SerializeField] Cypher.Combat.WeaponSystem guns;
+        [SerializeField] Cypher.Fight.EnemyController fight;
 
         readonly ScreenStack _stack = new ScreenStack();
         readonly NoticeQueue _notices = new NoticeQueue();
@@ -210,6 +211,7 @@ namespace Cypher.UI
                 if (gameCamera == null) throw new InvalidOperationException("UiRoot's HUD needs the game camera; call Configure with it.");
                 _hud = new Hud(rpg);
                 if (guns != null) _hud.AttachGuns(guns);
+                if (fight != null) _hud.AttachFight(fight);
                 _hud.SetInteractKey(() => BindingText.Describe(settings.Bindings.Get(GameAction.Interact, BindingSlot.Primary)).ToUpperInvariant());
                 _hud.SetShown(false);
                 _root.Add(_hud.Root);   // beneath the menus

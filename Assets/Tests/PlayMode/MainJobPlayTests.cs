@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Cypher.Combat;
 using Cypher.Core;
+using Cypher.Fight;
 using Cypher.Player;
 using Cypher.Rpg;
 using Cypher.UI;
@@ -17,7 +18,8 @@ namespace Cypher.Tests
     /// <summary>
     /// Gate C's pilot: the main job played to the corpo ending in the real Slice scene. The pilot is put at each place (walking is the street-route tests' job),
     /// presses E, answers through the conversation screen and picks the breach through its cells. Halfway it saves from the pause menu, goes to the title and
-    /// Continues, and it fires the gun on the way.
+    /// Continues, and it fires the gun on the way. The Data Core's guards (M5) are put down through the fight's sim and paid through the RPG, as a kill by the gun
+    /// is; fighting them with the gun and a hack is Gate D's pilot.
     /// </summary>
     public class MainJobPlayTests
     {
@@ -118,6 +120,23 @@ namespace Cypher.Tests
             Assert.AreEqual(UiScreen.None, Ui.Top);
         }
 
+        /// <summary>The Data Core's four guards, come to the core with the job: put down, each kill paid as the gun's would be.</summary>
+        static IEnumerator ClearGuards()
+        {
+            EnemyController fight = Object.FindFirstObjectByType<EnemyController>();
+            EnemySquad guards = null;
+            for (int i = 0; i < 120 && (guards = fight.EncounterDirector.Live("enc_datacore_guards")) == null; i++) yield return null;
+            Assert.IsNotNull(guards, "the guards are at the core");
+            Assert.AreEqual(4, guards.All.Count);
+            foreach (Enemy e in guards.All)
+            {
+                Assert.IsTrue(fight.Sim.Harm(e, 1e6));
+                Rpg.Kill(e.Archetype, e.Squad.Tag, new Vector3((float)e.Position.X, (float)e.Position.Y, (float)e.Position.Z));
+            }
+            Assert.IsTrue(Rpg.Core.Quests.GetState(Job).IsDone("o_guards"));
+            yield return Frames(4);
+        }
+
         static IEnumerator Burst()
         {
             int before = Guns.Rig.Current.Ammo;
@@ -174,8 +193,10 @@ namespace Cypher.Tests
                 Assert.IsTrue(Guns.Drawn, "the gun is drawn in the loaded game");
                 yield return Burst();
 
-                // the core: breach first, then Wire
+                // the core: its guards, the breach, then Wire
                 yield return StandAt("datacore");
+                Assert.IsNull(Rpg.Prompt, "nothing to do at the core while its guards stand");
+                yield return ClearGuards();
                 Assert.AreEqual("breach:datacore", Rpg.Prompt, "the job's breach is what E does here");
                 yield return PressE(input);
                 yield return Breach();

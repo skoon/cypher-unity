@@ -139,6 +139,30 @@ namespace Cypher.Tests
         }
 
         [UnityTest]
+        public IEnumerator AKillPaysAndAHitHurtsThroughTheService()
+        {
+            yield return SliceTestScene.LoadAndPlay();
+            yield return Frames(2);
+            var events = new List<string>();
+            Rpg.Event += (t, p) => events.Add(t);
+            double xp = Rpg.Core.Stats.Xp, health = Rpg.Core.Health;
+
+            Rpg.Kill(EnemyTable.Heavy, "jackal", new Vector3(1, 0, 2));
+            Assert.AreEqual(xp + EnemyTable.Heavy.Xp, Rpg.Core.Stats.Xp, "the heavy's XP");
+            CollectionAssert.Contains(events, "rpg:lootDropped");
+            CollectionAssert.Contains(events, "rpg:credGained");
+
+            Rpg.HurtPlayer(20, "gunner");
+            Assert.AreEqual(health - DamageModel.Mitigate(20, Rpg.Core.Derived["armor"]), Rpg.Core.Health, 1e-9);
+            Assert.AreEqual(Rpg.Core.Derived["rangedDamage"], Rpg.Shooter.RangedDamage);
+
+            Assert.IsTrue(SliceTestScene.Flow.Pause());
+            Assert.IsTrue(SliceTestScene.Flow.ReturnToTitle());
+            yield return Frames(2);
+            Assert.Throws<System.InvalidOperationException>(() => Rpg.Kill(EnemyTable.Gunner, null, Vector3.zero), "no kills at the title");
+        }
+
+        [UnityTest]
         public IEnumerator TimeStandsStillForTheRpgWhilePaused()
         {
             yield return SliceTestScene.LoadAndPlay();

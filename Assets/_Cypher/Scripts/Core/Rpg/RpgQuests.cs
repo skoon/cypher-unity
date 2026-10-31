@@ -110,6 +110,16 @@ namespace Cypher.Core
                         if (RpgJs.Truthy(Get(o, "hidden"))) RpgConditions.Assert(o["hidden"], $"{qid}.{sid}.{oid}.hidden");
                         RpgEffects.AssertAll(Get(o, "onComplete"), $"{qid}.{sid}.{oid}.onComplete");
                     }
+                    foreach (JsonObject o in objectives)
+                    {
+                        foreach (object a in RpgJs.AsList(Get(o, "after")))
+                        {
+                            if (!(a is string first) || first == Str(o, "id") || !objIds.Contains(first))
+                            {
+                                throw new InvalidOperationException($"Objective \"{qid}.{sid}.{Str(o, "id")}\" waits on \"{a}\", which is not another objective of its stage");
+                            }
+                        }
+                    }
                     foreach (JsonObject b in Objs(Get(s, "branches")))
                     {
                         RpgConditions.Assert(Get(b, "when"), $"{qid}.{sid}.branch");
@@ -342,7 +352,7 @@ namespace Cypher.Core
             foreach (JsonObject o in Objs(stage["objectives"]))
             {
                 string oid = Str(o, "id");
-                if (st.IsDone(oid)) continue;
+                if (st.IsDone(oid) || Waiting(st, o)) continue;
                 string trigger = Str(o, "trigger");
                 if (trigger == "item")
                 {
@@ -428,7 +438,7 @@ namespace Cypher.Core
         // ------------------------------------------------------------ triggers
 
         /// <summary>Visit the open objectives of every active quest; the visitor returns true to stop with that quest.</summary>
-        void ForEachActiveObjective(Func<string, JsonObject, bool> fn)
+        void ForEachActiveObjective(Func<string, JsonObject, bool> fn, bool waiting = false)
         {
             foreach (QuestRuntime st in StatesInOrder())
             {
@@ -437,10 +447,17 @@ namespace Cypher.Core
                 if (stage == null) continue;
                 foreach (JsonObject o in Objs(stage["objectives"]))
                 {
-                    if (st.IsDone(Str(o, "id"))) continue;
+                    if (st.IsDone(Str(o, "id")) || Waiting(st, o) != waiting) continue;
                     if (fn(st.Id, o)) break;
                 }
             }
+        }
+
+        /// <summary>An objective with <c>after</c> (our addition; the prototype's jobs have none) is not open until those of its stage are done.</summary>
+        static bool Waiting(QuestRuntime st, JsonObject o)
+        {
+            foreach (object a in RpgJs.AsList(Get(o, "after"))) if (!st.IsDone((string)a)) return true;
+            return false;
         }
 
         public void NotifyTalk(string dialogueId) => ForEachActiveObjective((questId, o) =>
@@ -472,6 +489,18 @@ namespace Cypher.Core
                 if (Str(o, "trigger") == "hack") targets.Add(Str(o, "target"));
                 return false;
             });
+            return targets;
+        }
+
+        /// <summary>The breach targets an active job will want once other objectives are done (<c>after</c>): nothing is done at those places until then.</summary>
+        public HashSet<string> WaitingHackTargets()
+        {
+            var targets = new HashSet<string>();
+            ForEachActiveObjective((questId, o) =>
+            {
+                if (Str(o, "trigger") == "hack") targets.Add(Str(o, "target"));
+                return false;
+            }, waiting: true);
             return targets;
         }
 

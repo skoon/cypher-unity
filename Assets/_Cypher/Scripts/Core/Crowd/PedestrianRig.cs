@@ -21,6 +21,13 @@ namespace Cypher.Core
         ShinL = 11,
         ThighR = 12,
         ShinR = 13,
+
+        /// <summary>The fighters' guns, in the right hand: drawn only for the one it is (<see cref="HeldWeapon"/>).</summary>
+        GunSmg = 14,
+        GunRevolver = 15,
+
+        /// <summary>A glowing band across the eyes, in the trim colour: the gang look.</summary>
+        Visor = 16,
     }
 
     public enum RigLod
@@ -72,7 +79,10 @@ namespace Cypher.Core
                 Stamp(LimbGeo(0.078, 0.058, PedestrianPose.ThighLength, 5), RigPart.ThighL),
                 Stamp(ShinGeo(), RigPart.ShinL),
                 Stamp(LimbGeo(0.078, 0.058, PedestrianPose.ThighLength, 5), RigPart.ThighR),
-                Stamp(ShinGeo(), RigPart.ShinR));
+                Stamp(ShinGeo(), RigPart.ShinR),
+                Stamp(SmgGeo(), RigPart.GunSmg),
+                Stamp(RevolverGeo(), RigPart.GunRevolver),
+                Stamp(VisorGeo(), RigPart.Visor));
         }
 
         /// <summary>A torso, a head and two legs as one rigid piece, standing on the ground (the prototype's "simple" rig).</summary>
@@ -184,6 +194,28 @@ namespace Cypher.Core
             MeshData shaft = Move(Cyl(0.011, 0.011, 0.72, 4), 0, 0.36, 0);
             return Merge(canopy, rim, shaft);
         }
+
+        // The held guns, three boxes each, in the gun's own frame: barrel along +Z, top +Y, the hand at the origin. The proportions are the viewmodels'
+        // (WeaponModels' Wasp and Magnat) at a glance; at the distances a fighter is seen from, more would not show, and every person's full body carries them.
+
+        static MeshData SmgGeo()
+        {
+            MeshData receiver = Move(Box(0.05, 0.075, 0.36), 0, 0.03, 0.10);   // the barrel shroud runs on from it
+            MeshData mag = Move(RotX(Box(0.03, 0.12, 0.04), 0.15), 0, -0.05, 0.13);
+            MeshData grip = Move(RotX(Box(0.035, 0.10, 0.04), -0.25), 0, -0.04, -0.01);
+            return Merge(receiver, mag, grip);
+        }
+
+        static MeshData RevolverGeo()
+        {
+            MeshData frame = Move(Box(0.05, 0.065, 0.12), 0, 0.035, 0.05);      // the frame with the cylinder in it
+            MeshData barrel = Move(Box(0.022, 0.026, 0.16), 0, 0.045, 0.18);
+            MeshData grip = Move(RotX(Box(0.032, 0.10, 0.045), -0.3), 0, -0.035, -0.01);
+            return Merge(frame, barrel, grip);
+        }
+
+        /// <summary>In the head's frame, across the front of the skull and just proud of it.</summary>
+        static MeshData VisorGeo() => Move(Box(0.20, 0.038, 0.05), 0, 0.02, 0.095);
 
         /// <summary>Emissive trim worn just proud of the torso so it never fights it for the pixel.</summary>
         static MeshData TrimGeo()

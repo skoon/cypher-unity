@@ -144,6 +144,13 @@ namespace Cypher.EditorTools
             audioEngine.Configure(audioMixer, flow, settings, playerController, camera.transform, cityBuilder, crowd, traffic, rainController);
             audioEngine.ConfigureGuns(guns);   // the shots, the impacts, the reloads
 
+            // The fights: the street patrols and the set encounters, their bodies drawn with the crowd, their gunfire, the HUD's arcs and bars, the Trauma Team.
+            var fightGo = new GameObject("Fight");
+            var fight = fightGo.AddComponent<Cypher.Fight.EnemyController>();
+            fight.Configure(flow, cityBuilder, playerController, camera.GetComponent<Camera>(), crowd, guns, rpg);
+            uiRoot.ConfigureFight(fight);
+            audioEngine.ConfigureFight(fight);
+
             EditorSceneManager.MarkSceneDirty(scene);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);

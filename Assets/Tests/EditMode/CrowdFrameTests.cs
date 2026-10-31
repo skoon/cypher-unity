@@ -45,9 +45,9 @@ namespace Cypher.Tests
         // ---------------------------------------------------------------- the GPU record
 
         [Test]
-        public void TheGpuRecordIsEightyBytesInTheShadersOrder()
+        public void TheGpuRecordIsAHundredAndTwelveBytesInTheShadersOrder()
         {
-            Assert.AreEqual(80, Marshal.SizeOf<PedestrianGpuData>());
+            Assert.AreEqual(112, Marshal.SizeOf<PedestrianGpuData>());
             Assert.AreEqual(PedestrianGpuData.Size, Marshal.SizeOf<PedestrianGpuData>());
             Assert.AreEqual(0, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.X)));
             Assert.AreEqual(12, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Heading)));
@@ -59,13 +59,19 @@ namespace Cypher.Tests
             Assert.AreEqual(60, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Trim)));
             Assert.AreEqual(64, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Umbrella)));
             Assert.AreEqual(68, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Flags)));
+            Assert.AreEqual(44, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Aim)));
+            Assert.AreEqual(72, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Weapon)));
+            Assert.AreEqual(80, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.AimPitch)));
+            Assert.AreEqual(92, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Recoil)));
+            Assert.AreEqual(96, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Flinch)));
+            Assert.AreEqual(100, (int)Marshal.OffsetOf<PedestrianGpuData>(nameof(PedestrianGpuData.Side)));
         }
 
         [Test]
         public void TheFlagBitsAreDistinct()
         {
-            uint[] flags = { PedestrianGpuData.FlagLongCoat, PedestrianGpuData.FlagUmbrella, PedestrianGpuData.FlagHood, PedestrianGpuData.FlagPack, PedestrianGpuData.FlagTrim };
-            Assert.AreEqual(5, flags.Distinct().Count());
+            uint[] flags = { PedestrianGpuData.FlagLongCoat, PedestrianGpuData.FlagUmbrella, PedestrianGpuData.FlagHood, PedestrianGpuData.FlagPack, PedestrianGpuData.FlagTrim, PedestrianGpuData.FlagVisor };
+            Assert.AreEqual(6, flags.Distinct().Count());
             foreach (uint f in flags) Assert.IsTrue(f != 0 && (f & (f - 1)) == 0, "exactly one bit");
         }
 
@@ -92,7 +98,78 @@ namespace Cypher.Tests
                 Assert.AreEqual(p.Y, d.Y, 1e-6);
                 uint expected = (a.LongCoat ? 1u : 0) | (a.Umbrella ? 2u : 0) | (a.Hood ? 4u : 0) | (a.Pack ? 8u : 0) | (a.Trim ? 16u : 0);
                 Assert.AreEqual(expected, d.Flags);
+                Assert.AreEqual(0u, d.Weapon, "a civilian is unarmed");
+                Assert.AreEqual(0, d.Aim);
+                Assert.AreEqual(0, d.Death);
             }
+        }
+
+        // ---------------------------------------------------------------- fighters
+
+        static CombatBody Fighter(int id, double x, double z, HeldWeapon weapon = HeldWeapon.Smg)
+        {
+            var look = new PedestrianAppearance(1.02, 1.1, false, false, true, false, true, 0x2a1014, 0x2a1014, 0x121318, EnemyLook.GangColour, 3, 0);
+            return new CombatBody(id, look, true, weapon, 4.5)
+            {
+                X = x, PrevX = x - 0.5, Z = z, PrevZ = z, Y = 0.185, PrevY = 0.185, Heading = 1, PrevHeading = 1, Phase = 2, PrevPhase = 1.8, Speed = 1.2,
+                Aim = 0.8, AimPitch = 0.1, Crouch = 0.3, Recoil = 0.6, Flinch = 0.2, Side = -0.5, Death = 0.25,
+            };
+        }
+
+        [Test]
+        public void FightersAreDrawnInTheCrowdsRunsWithTheirPose()
+        {
+            CrowdSim sim = StandingAt(10, 60, 100);
+            var fighters = new[] { Fighter(7, 20, 0), Fighter(8, 70, 0, HeldWeapon.Revolver), Fighter(9, 150, 0) };
+            var frame = new CrowdFrame();
+            frame.Build(sim, Frustum.Everything(), 0, 0, 0.5, 5.0, 1.0 / 60, 42, 92, fighters);
+            Assert.AreEqual(6, frame.Total);
+            Assert.AreEqual(2, frame.Count(RigLod.Full));
+            Assert.AreEqual(2, frame.Count(RigLod.Simple));
+            Assert.AreEqual(2, frame.Count(RigLod.Silhouette));
+            var armed = frame.Data.Take(frame.Total).Where(d => d.Weapon != 0).ToList();
+            Assert.AreEqual(3, armed.Count);
+            PedestrianGpuData near = frame.Data.Take(frame.Count(RigLod.Full)).Single(d => d.Weapon != 0);
+            Assert.AreEqual((uint)HeldWeapon.Smg, near.Weapon);
+            Assert.AreEqual(19.75, near.X, 1e-4, "interpolated like everyone");
+            Assert.AreEqual(0.8, near.Aim, 1e-6);
+            Assert.AreEqual(0.1, near.AimPitch, 1e-6);
+            Assert.AreEqual(0.3, near.Crouch, 1e-6);
+            Assert.AreEqual(0.6, near.Recoil, 1e-6);
+            Assert.AreEqual(0.2, near.Flinch, 1e-6);
+            Assert.AreEqual(-0.5, near.Side, 1e-6);
+            Assert.AreEqual(0.25, near.Death, 1e-6);
+            Assert.AreEqual(1.9, near.Phase, 1e-5);
+            Assert.AreEqual(EnemyLook.GangColour, near.Trim);
+            Assert.AreEqual(PedestrianGpuData.FlagHood | PedestrianGpuData.FlagTrim | PedestrianGpuData.FlagVisor, near.Flags);
+            Assert.AreEqual((uint)HeldWeapon.Revolver, frame.Data.Skip(frame.Start(RigLod.Simple)).Take(frame.Count(RigLod.Simple)).Single(d => d.Weapon != 0).Weapon);
+        }
+
+        [Test]
+        public void FightersOutOfViewAreLeftOutAndKeepTheirDetailLevelLikeEveryone()
+        {
+            CrowdSim sim = StandingAt(10);
+            CombatBody f = Fighter(3, 40, 0);
+            var frame = new CrowdFrame();
+            frame.Build(sim, Box(-5, 15, -5, 5), 0, 0, 1, 5.0, 1.0 / 60, 42, 92, new[] { f });
+            Assert.AreEqual(1, frame.Total, "the fighter at 40 m is outside the box");
+            frame.Build(sim, Frustum.Everything(), 0, 0, 1, 5.0, 1.0 / 60, 42, 92, new[] { f });
+            Assert.AreEqual(2, frame.Count(RigLod.Full), "at 40 m, first seen: full, with the civilian at 10 m");
+            f.X = f.PrevX = 46;   // past 42 but inside the hysteresis
+            frame.Build(sim, Frustum.Everything(), 0, 0, 1, 5.0, 1.0 / 60, 42, 92, new[] { f });
+            Assert.AreEqual(2, frame.Count(RigLod.Full), "it stays at full detail within the hysteresis");
+        }
+
+        [Test]
+        public void TheFrameGrowsToHoldTheFightersAndCiviliansStayUnarmedAfterThem()
+        {
+            CrowdSim sim = StandingAt(10, 11);
+            var frame = new CrowdFrame();
+            frame.Build(sim, Frustum.Everything(), 0, 0, 1, 5.0, 1.0 / 60, 42, 92, new[] { Fighter(1, 12, 0), Fighter(2, 13, 0) });
+            Assert.AreEqual(4, frame.Total);
+            frame.Build(sim, Frustum.Everything(), 0, 0, 1, 5.0, 1.0 / 60, 42, 92);
+            Assert.AreEqual(2, frame.Total);
+            Assert.IsTrue(frame.Data.Take(2).All(d => d.Weapon == 0 && d.Aim == 0 && d.Death == 0 && (d.Flags & PedestrianGpuData.FlagVisor) == 0), "the records are reused: every field is written");
         }
 
         // ---------------------------------------------------------------- culling

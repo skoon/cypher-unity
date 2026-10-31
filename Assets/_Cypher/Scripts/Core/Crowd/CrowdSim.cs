@@ -49,6 +49,9 @@ namespace Cypher.Core
         /// <summary>Nobody ends up closer to the player than this.</summary>
         public const double KeepOut = 0.62;
 
+        /// <summary>How long someone runs from a gunshot (this, give or take a fifth), and how much faster than their walk.</summary>
+        public const double FleeSeconds = 7, FleeRun = 2.4;
+
         readonly CityNav _nav;
         readonly Rng _rng;
         readonly CrowdRules _rules;
@@ -128,6 +131,16 @@ namespace Cypher.Core
             IReadOnlyList<int> adj = _nav.Neighbours(p.Node);
             IReadOnlyList<Crossing> cross = _nav.NeighbourCrossings(p.Node);
             double hx = Math.Sin(p.Heading), hz = Math.Cos(p.Heading);
+            if (p.Fleeing)
+            {
+                // the way on is away from the shots, not straight ahead
+                double fx = p.X - p.FleeX, fz = p.Z - p.FleeZ, fl = Length(fx, fz);
+                if (fl > 1e-6)
+                {
+                    hx = fx / fl;
+                    hz = fz / fl;
+                }
+            }
 
             int best = -1;
             double bestW = -1;
@@ -176,8 +189,58 @@ namespace Cypher.Core
             p.State = _rng.Next() < 0.06 ? PedState.Idle : (_rng.Next() < 0.2 ? PedState.Hurry : PedState.Walk);
             p.Speed = p.Cruise;
             p.WaitTimer = 0;
+            p.FleeTimer = 0;
             p.PrevX = p.X; p.PrevZ = p.Z; p.PrevY = p.Y;
             p.PrevHeading = p.Heading;
+        }
+
+        // ---------------------------------------------------------------- a gunfight
+
+        /// <summary>
+        /// Shots at (<paramref name="x"/>, <paramref name="z"/>): everyone within <paramref name="radius"/> runs from there, along the pavements, turning back if they were walking
+        /// towards it; someone already running runs on from the latest. Returns how many heard it.
+        /// </summary>
+        public int Alarm(double x, double z, double radius)
+        {
+            if (!(radius > 0)) throw new ArgumentOutOfRangeException(nameof(radius), radius, "an alarm needs a reach");
+            double r2 = radius * radius;
+            int heard = 0;
+            for (int i = 0; i < _active.Count; i++)
+            {
+                Pedestrian p = _active[i];
+                double dx = p.X - x, dz = p.Z - z;
+                if (dx * dx + dz * dz > r2) continue;
+                heard++;
+                p.FleeTimer = FleeSeconds * (0.8 + 0.4 * _rng.Next());
+                p.FleeX = x;
+                p.FleeZ = z;
+                p.WaitTimer = 0;
+                if (p.State == PedState.Idle) p.State = PedState.Hurry;
+                // walking at it: turn round and go back the way they came
+                double ax = p.Tx - p.X, az = p.Tz - p.Z;
+                if (ax * dx + az * dz < 0) TurnBack(p);
+            }
+            return heard;
+        }
+
+        /// <summary>Head back to the node just left, on the same side of the way.</summary>
+        void TurnBack(Pedestrian p)
+        {
+            if (p.PrevNode < 0) return;
+            int from = p.Node, to = p.PrevNode;
+            IReadOnlyList<int> adj = _nav.Neighbours(from);
+            IReadOnlyList<Crossing> cross = _nav.NeighbourCrossings(from);
+            int k = -1;
+            for (int i = 0; i < adj.Count; i++) if (adj[i] == to) k = i;
+            if (k < 0) return;   // not a way back from here
+            p.Node = to;
+            p.PrevNode = from;
+            p.Crossing = cross[k];
+            double ddx = _nav.NodeX(to) - _nav.NodeX(from), ddz = _nav.NodeZ(to) - _nav.NodeZ(from);
+            double dl = Length(ddx, ddz);
+            if (dl == 0) dl = 1;
+            p.Tx = _nav.NodeX(to) + -ddz / dl * p.Lat;
+            p.Tz = _nav.NodeZ(to) + ddx / dl * p.Lat;
         }
 
         // ---------------------------------------------------------------- stepping
@@ -203,7 +266,17 @@ namespace Cypher.Core
                     continue;
                 }
 
-                UpdateState(p, dt);
+                if (p.Fleeing)
+                {
+                    p.FleeTimer -= dt;
+                    if (!p.Fleeing)
+                    {
+                        // over: they hurry on a while yet
+                        p.State = PedState.Hurry;
+                        p.Timer = 3 + _rng.Next() * 4;
+                    }
+                }
+                else UpdateState(p, dt);
 
                 double targetDx = p.Tx - p.X, targetDz = p.Tz - p.Z;
                 double targetD = Length(targetDx, targetDz);
@@ -253,7 +326,7 @@ namespace Cypher.Core
                     if (fx != 0 || fz != 0) desired = Math.Atan2(fx, fz);
                 }
 
-                double cruise = p.State == PedState.Idle ? 0 : p.State == PedState.Hurry ? p.Cruise * 1.85 : p.Cruise;
+                double cruise = p.Fleeing ? p.Cruise * FleeRun : p.State == PedState.Idle ? 0 : p.State == PedState.Hurry ? p.Cruise * 1.85 : p.Cruise;
                 double congestion = Math.Min(0.7, push.Crowd * 0.35);
                 double wanted = cruise * (1 - congestion);
 

@@ -39,7 +39,9 @@ namespace Cypher.Audio
         [SerializeField] TrafficController _traffic;
         [SerializeField] RainController _rain;
         [SerializeField] Cypher.Combat.WeaponSystem guns;
+        [SerializeField] Cypher.Fight.EnemyController fight;
         GunAudio _gunAudio;
+        EnemyGunAudio _enemyGunAudio;
 
         AudioNoiseBank _noise;
         AudioClipBank _clips;
@@ -158,6 +160,13 @@ namespace Cypher.Audio
         /// <summary>The guns, whose shots, impacts and mechanics this plays; optional (a scene without guns has none).</summary>
         public void ConfigureGuns(Cypher.Combat.WeaponSystem weaponSystem) => guns = weaponSystem;
 
+        public void ConfigureFight(Cypher.Fight.EnemyController enemies) => fight = enemies;
+
+        public EnemyGunAudio EnemyGuns => _enemyGunAudio;
+
+        /// <summary>Where the ears are (the camera).</summary>
+        public Vector3 ListenerPosition => _listener.position;
+
         public GunAudio Guns => _gunAudio;
 
         public void Configure(UnityEngine.Audio.AudioMixer audioMixer, GameFlow gameFlow, SettingsService settingsService, FirstPersonController firstPerson, Transform listenerTransform,
@@ -207,6 +216,7 @@ namespace Cypher.Audio
 
             _flow.StateChanged += OnFlowChanged;
             if (guns != null) _gunAudio = new GunAudio(this, guns);
+            if (fight != null) _enemyGunAudio = new EnemyGunAudio(this, fight);
             if (_settings != null)
             {
                 _settings.Applied += OnSettings;
@@ -224,6 +234,7 @@ namespace Cypher.Audio
             if (_flow != null) _flow.StateChanged -= OnFlowChanged;
             if (_settings != null) _settings.Applied -= OnSettings;
             _gunAudio?.Dispose();
+            _enemyGunAudio?.Dispose();
             if (UiSound.Sink == (Action<string>)PlayUi) UiSound.Sink = null;
             TearDownWorld();
             _clips?.Dispose();

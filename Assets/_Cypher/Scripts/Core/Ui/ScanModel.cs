@@ -6,7 +6,7 @@ using System.Linq;
 namespace Cypher.Core
 {
     /// <summary>What the scanner can tag.</summary>
-    public enum ScanKind { Place, Person, Vehicle }
+    public enum ScanKind { Place, Person, Vehicle, Enemy }
 
     /// <summary>A thing the scanner can tag: what it is, what is known about it, where its middle is and how tall it stands (for the bracket).</summary>
     public readonly struct ScanContact
@@ -39,7 +39,7 @@ namespace Cypher.Core
         /// <summary>The charge after <paramref name="dt"/> seconds of holding (or not holding) the button.</summary>
         public static double Charge(double charge, bool held, double dt) => Damp(charge, held ? 1 : 0, held ? ChargeUp : ChargeDown, dt);
 
-        /// <summary>The contacts to tag: in range, passing <paramref name="inView"/>, nearest first, at most <see cref="MaxTags"/>.</summary>
+        /// <summary>The contacts to tag: in range, passing <paramref name="inView"/>, the enemies first and then the nearest, at most <see cref="MaxTags"/>.</summary>
         public static List<(ScanContact Contact, double Distance)> Pick(IEnumerable<ScanContact> contacts, double eyeX, double eyeY, double eyeZ, Func<ScanContact, bool> inView)
         {
             var found = new List<(ScanContact, double)>();
@@ -51,7 +51,7 @@ namespace Cypher.Core
                 if (!inView(c)) continue;
                 found.Add((c, d));
             }
-            return found.OrderBy(f => f.Item2).Take(MaxTags).ToList();
+            return found.OrderBy(f => f.Item1.Kind == ScanKind.Enemy ? 0 : 1).ThenBy(f => f.Item2).Take(MaxTags).ToList();
         }
 
         /// <summary>The state line: acquiring while charging, the count once locked, standby when let go.</summary>
@@ -77,6 +77,16 @@ namespace Cypher.Core
         }
 
         public static ScanContact Person(double x, double y, double z) => new ScanContact(ScanKind.Person, "CIVILIAN", "NIGHT SECTOR // NO THREAT", "", x, y + 0.95, z, 1.85);
+
+        /// <summary>An enemy: what it is, whether it fights (and whose it is), and, on the one a hack would go onto, the hack and its RAM.</summary>
+        public static ScanContact Enemy(Enemy e, string hack = null, double cost = 0)
+        {
+            if (e == null) throw new ArgumentNullException(nameof(e));
+            string side = e.Squad.Hostile ? "HOSTILE" : "NEUTRAL";
+            string action = hack == null ? "" : $"[FIRE] {hack.ToUpperInvariant()} // {cost.ToString("0", CultureInfo.InvariantCulture)} RAM";
+            return new ScanContact(ScanKind.Enemy, e.Archetype.Name.ToUpperInvariant(), $"{e.Squad.Tag.ToUpperInvariant()} // {side}", action,
+                e.Position.X, e.Position.Y + 0.95, e.Position.Z, 1.85);
+        }
 
         public static ScanContact Vehicle(string type, double x, double y, double z) =>
             new ScanContact(ScanKind.Vehicle, (type ?? "vehicle").Replace('_', ' ').ToUpperInvariant(), "GROUND TRAFFIC // NO THREAT", "", x, y + 0.8, z, 1.6);

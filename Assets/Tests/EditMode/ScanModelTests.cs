@@ -56,5 +56,27 @@ namespace Cypher.Tests
             Assert.IsTrue(places.All(p => p.Kind == ScanKind.Place && p.Sub.Length > 0));
             Assert.IsTrue(places.Any(p => p.Action.StartsWith("BREACH ")), "a breach target is marked");
         }
+
+        [Test]
+        public void EnemiesAreTaggedBeforeAnythingNearerAndTheTargetSaysWhatFireDoes()
+        {
+            var sim = new EnemySim(1);
+            Enemy far = sim.Add(sim.AddSquad("rust jackals"), EnemyTable.Heavy, new V3(0, 0, 40), 0);
+            Enemy patrol = sim.Add(sim.AddSquad("street", hostile: false), EnemyTable.Gunner, new V3(0, 0, 30), 0);
+            var contacts = Enumerable.Range(0, ScanModel.MaxTags).Select(i => ScanModel.Person(i, 0, 3)).ToList();
+            contacts.Add(ScanModel.Enemy(far, "Short Circuit", 5));
+            contacts.Add(ScanModel.Enemy(patrol));
+            var picked = ScanModel.Pick(contacts, 0, 0.95, 0, c => true);
+            Assert.AreEqual(ScanModel.MaxTags, picked.Count);
+            Assert.AreEqual(ScanKind.Enemy, picked[0].Contact.Kind);
+            Assert.AreEqual(ScanKind.Enemy, picked[1].Contact.Kind);
+            Assert.AreEqual(30, picked[0].Distance, 0.1, "the enemies nearest first among themselves");
+            ScanContact target = picked[1].Contact;
+            Assert.AreEqual("HEAVY", target.Name);
+            Assert.AreEqual("RUST JACKALS // HOSTILE", target.Sub);
+            Assert.AreEqual("[FIRE] SHORT CIRCUIT // 5 RAM", target.Action);
+            Assert.AreEqual("STREET // NEUTRAL", picked[0].Contact.Sub);
+            Assert.AreEqual("", picked[0].Contact.Action);
+        }
     }
 }

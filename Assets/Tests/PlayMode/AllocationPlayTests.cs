@@ -6,6 +6,7 @@ using System.Linq;
 using Cypher.City;
 using Cypher.Combat;
 using Cypher.Core;
+using Cypher.Fight;
 using Cypher.Perf;
 using Cypher.Player;
 using Cypher.Rpg;
@@ -44,13 +45,17 @@ namespace Cypher.Tests
             {
                 for (int i = 0; i < 10; i++) yield return null;
                 Assert.IsTrue(rec.Valid, "the allocation counter is there");
-                long total = 0;
+                long total = 0, most = 0;
+                int big = 0;
                 for (int i = 0; i < frames; i++)
                 {
                     yield return null;
                     total += rec.LastValue;
+                    most = Math.Max(most, rec.LastValue);
+                    if (rec.LastValue > 32 * 1024) big++;
                 }
                 into.Add((label, total / (double)frames));
+                Debug.Log($"[Cypher] allocation: {label}: most in a frame {most / 1024.0:F1} KB, {big} frames over 32 KB");
             }
         }
 
@@ -71,6 +76,15 @@ namespace Cypher.Tests
             yield return Measure("everything", 120, rows);
             guns.ScriptedFire = true;
             yield return Measure("everything, firing", 120, rows);
+            Debug.Log($"[Cypher] allocation: while firing, {Find<EnemyController>().Sim.Enemies.Count(e => e.Squad.Hostile)} hostile enemies");
+            EnemyController fight = Find<EnemyController>();
+            fight.PatrolsOn = false;
+            fight.Patrols.Reset();
+            yield return Measure("firing, no patrols", 120, rows);
+            fight.enabled = false;
+            yield return Measure("firing, without fights", 120, rows);
+            fight.enabled = true;
+            fight.PatrolsOn = true;
             guns.ScriptedFire = false;
             yield return new WaitForSeconds(3f);
 

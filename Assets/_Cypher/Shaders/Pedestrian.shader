@@ -72,7 +72,7 @@ Shader "Cypher/Pedestrian"
                 return SRGBToLinear(srgb);
             }
 
-            // The surface of each part (the prototype's materials): cloth, skin, umbrella silk, glowing trim.
+            // The surface of each part (the prototype's materials): cloth, skin, umbrella silk, glowing trim; and the fighters' gunmetal and visor.
             void PartSurface(uint part, PedInstance p, out float3 albedo, out float3 emission, out float2 surface)
             {
                 emission = float3(0, 0, 0);
@@ -104,6 +104,16 @@ Shader "Cypher/Pedestrian"
                     albedo = float3(0, 0, 0);
                     emission = PedColour(p.colours.w) * p.c.z;
                 }
+                else if (part == PED_PART_VISOR)
+                {
+                    albedo = float3(0, 0, 0);
+                    emission = PedColour(p.colours.w) * p.c.z * 1.2;   // the eyes burn a little hotter than the trim
+                }
+                else if (part == PED_PART_GUN_SMG || part == PED_PART_GUN_REVOLVER)
+                {
+                    albedo = PedColour(0x272b33u);   // the viewmodels' gunmetal frame
+                    surface = float2(1.0 - 0.45, 0.9);
+                }
                 else
                 {
                     albedo = PedColour(p.colours.x);   // torso, arms and the cheap bodies are the coat
@@ -116,7 +126,7 @@ Shader "Cypher/Pedestrian"
                 PedInstance p = _Peds[(uint)(_InstanceBase + 0.5) + instanceID];
                 uint part = (uint)(input.part.x + 0.5);
 
-                if (!PedWorn(part, p.extra.y))
+                if (!PedWorn(part, p))
                 {
                     // a part this person lacks collapses to a point and is clipped away with all its triangles
                     output.positionCS = float4(0, 0, 0, 0);

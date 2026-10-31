@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cypher.City;
 using Cypher.Core;
 using Cypher.Game;
@@ -60,6 +61,9 @@ namespace Cypher.Actors
         public CrowdProxies Proxies => _proxies;
 
         public bool IsActive => _sim != null;
+
+        /// <summary>The enemies' bodies, drawn with the crowd (no draws of their own). Whoever runs the fights sets this; null is nobody.</summary>
+        public IReadOnlyList<CombatBody> Fighters { get; set; }
 
         /// <summary>What the people ask before they step into a road. The traffic sets this while it runs; null means every road is clear.</summary>
         public ITrafficQuery TrafficQuery { get; set; }
@@ -176,7 +180,7 @@ namespace Cypher.Actors
         public void DrawNow()
         {
             if (_sim == null) return;
-            _renderer.Render(_sim, viewCamera, Math.Min(1.0, Alpha), Time.timeAsDouble, Time.deltaTime, _near, _far);
+            _renderer.Render(_sim, viewCamera, Math.Min(1.0, Alpha), Time.timeAsDouble, Time.deltaTime, _near, _far, Fighters);
             if (Time.realtimeSinceStartup >= _nextStatusLog)
             {
                 _nextStatusLog = Time.realtimeSinceStartup + StatusLogSeconds;

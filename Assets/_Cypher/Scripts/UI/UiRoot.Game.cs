@@ -42,6 +42,9 @@ namespace Cypher.UI
         /// <summary>The guns, for the HUD's weapon panel, crosshair and hit marker; optional.</summary>
         public void ConfigureGuns(Cypher.Combat.WeaponSystem weaponSystem) => guns = weaponSystem;
 
+        /// <summary>The fights, for the HUD's hit arcs, enemy health bar and flatline screen; optional.</summary>
+        public void ConfigureFight(Cypher.Fight.EnemyController enemies) => fight = enemies;
+
         /// <summary>The people and the traffic, for the scanner's contacts; optional (a scene without them scans the places only).</summary>
         public void ConfigureScanner(CrowdController crowdController, TrafficController trafficController)
         {
@@ -261,6 +264,16 @@ namespace Cypher.UI
             if (traffic != null && traffic.Sim != null)
             {
                 foreach (var v in traffic.Sim.Vehicles) yield return ScanModel.Vehicle(v.Type?.Key, v.X, v.Y, v.Z);
+            }
+            if (fight != null && fight.Sim != null)
+            {
+                Item hack = fight.HackSlot >= 0 ? rpg.Core.Inventory.DeckItems()[fight.HackSlot] : null;
+                foreach (Enemy e in fight.Sim.Enemies)
+                {
+                    if (e.State == EnemyState.Down) continue;
+                    bool target = e == fight.HackTarget && hack != null;
+                    yield return ScanModel.Enemy(e, target ? hack.Name : null, target ? rpg.Core.Deck.CostOf(hack.Hack, rpg.Core.HackDiscount) : 0);
+                }
             }
         }
 

@@ -938,5 +938,58 @@ namespace Cypher.Tests
             Assert.AreEqual(1, core.Count("rpg:lootDropped"));
             Assert.GreaterOrEqual(core.Count("rpg:itemAdded"), 1);
         }
+
+        [Test]
+        public void CombatKillPaysAsThePrototypesContractSays()
+        {
+            var core = new Core();
+            core.C.CombatKill();
+            JsonObject xp = core.Events.Single(e => e.Type == "rpg:xpGained").Payload;
+            Assert.AreEqual(45.0, xp["amount"], "45 XP when the kill names none");
+            Assert.AreEqual("combat", xp["source"]);
+            Assert.AreEqual(0, core.Count("rpg:credGained"), "no cred unless the kill gives some");
+            JsonObject loot = core.Events.Single(e => e.Type == "rpg:lootDropped").Payload;
+            Assert.AreEqual("kill", loot["source"]);
+
+            core.Events.Clear();
+            var at = new JsonObject { ["x"] = 1.0, ["y"] = 0.0, ["z"] = 2.0 };
+            core.C.CombatKill(xp: 120, cred: 5, tier: 2, position: at);
+            Assert.AreEqual(120.0, core.Events.First(e => e.Type == "rpg:xpGained").Payload["amount"]);
+            Assert.AreEqual(1, core.Count("rpg:credGained"));
+            Assert.AreSame(at, core.Events.Single(e => e.Type == "rpg:lootDropped").Payload["position"]);
+        }
+
+        [Test]
+        public void AKillWithATagCountsTowardsAKillObjective()
+        {
+            JsonObject job = Obj(@"{
+                ""id"": ""q_test_cull"", ""title"": ""Cull"", ""type"": ""gig"", ""giver"": ""nobody"", ""summary"": ""Two of them."",
+                ""stages"": [ { ""id"": ""s_cull"", ""title"": ""Cull"", ""journal"": ""Two."",
+                    ""objectives"": [ { ""id"": ""o_cull"", ""text"": ""Put down two jackals"", ""trigger"": ""kill"", ""tag"": ""jackal"", ""count"": 2 } ],
+                    ""complete"": ""done"" } ],
+                ""outcomes"": { ""done"": { ""title"": ""Done"", ""summary"": ""Done."" } }
+            }");
+            var events = new List<string>();
+            var core = new RpgCore((t, p) => events.Add(t), 20771, new MemorySaveStorage(), () => 1700000000000, quests: new[] { job }) { AutosaveEnabled = false };
+            Assert.IsTrue(core.StartQuest("q_test_cull").Ok);
+            core.CombatKill(tag: "someone_else");
+            core.CombatKill(tag: "jackal");
+            Assert.AreEqual("active", core.Quests.GetState("q_test_cull").State, "one of two");
+            core.CombatKill(tag: "jackal");
+            Assert.AreEqual("completed", core.Quests.GetState("q_test_cull").State);
+        }
+
+        [Test]
+        public void PlayerDamageGoesThroughTheArmour()
+        {
+            var core = new Core();
+            double before = core.C.Health;
+            core.C.PlayerDamage(40, "gunner");
+            Assert.AreEqual(before - DamageModel.Mitigate(40, core.C.Derived["armor"]), core.C.Health, 1e-9);
+            JsonObject hurt = core.Events.Single(e => e.Type == "rpg:damaged").Payload;
+            Assert.AreEqual("gunner", hurt["source"]);
+            core.C.PlayerDamage();
+            Assert.AreEqual(before - DamageModel.Mitigate(40, core.C.Derived["armor"]) - DamageModel.Mitigate(10, core.C.Derived["armor"]), core.C.Health, 1e-9, "10 when the hit names no amount");
+        }
     }
 }

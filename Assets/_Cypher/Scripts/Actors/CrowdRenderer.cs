@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Cypher.City;
 using Cypher.Core;
 using UnityEngine;
@@ -8,7 +9,7 @@ namespace Cypher.Actors
 {
     /// <summary>
     /// Draws the crowd: each frame the people in view are written into one structured buffer, sorted by level of detail (see <see cref="CrowdFrame"/>), and one instanced draw
-    /// per level plus one for the contact shadows puts them all on screen. The pedestrian shader poses every vertex from the buffer, so the CPU's work is the culling, the sort
+    /// per level plus one for the contact shadows puts them all on screen; the fighters (<see cref="CombatBody"/>) ride in the same buffer and draws. The pedestrian shader poses every vertex from the buffer, so the CPU's work is the culling, the sort
     /// and 80 bytes a person. Owns its meshes, buffer and property blocks; <see cref="Dispose"/> releases them.
     /// </summary>
     public sealed class CrowdRenderer : IDisposable
@@ -39,7 +40,7 @@ namespace Cypher.Actors
         /// <summary>Draw calls issued by the last <see cref="Render"/>.</summary>
         public int DrawCalls { get; private set; }
 
-        public CrowdRenderer(Material body, Material shadow, int capacity = QualityTiers.MaxPedestrians)
+        public CrowdRenderer(Material body, Material shadow, int capacity = QualityTiers.MaxPedestrians + EnemyBodies.Max)
         {
             if (body == null) throw new ArgumentNullException(nameof(body));
             if (shadow == null) throw new ArgumentNullException(nameof(shadow));
@@ -64,13 +65,15 @@ namespace Cypher.Actors
         }
 
         /// <summary>Prepare this frame's people and queue the draws. The camera decides who is in view and which body each person gets.</summary>
-        public void Render(CrowdSim sim, Camera camera, double alpha, double time, double dt, double near, double far)
+        /// <param name="fighters">Optional: the enemies' bodies, drawn with the crowd.</param>
+        public void Render(CrowdSim sim, Camera camera, double alpha, double time, double dt, double near, double far, IReadOnlyList<CombatBody> fighters = null)
         {
             if (_buffer == null) throw new ObjectDisposedException(nameof(CrowdRenderer));
-            if (sim.Pool.Count > _buffer.count) throw new InvalidOperationException($"the crowd has {sim.Pool.Count} people but the buffer holds {_buffer.count}");
+            int people = sim.Pool.Count + (fighters?.Count ?? 0);
+            if (people > _buffer.count) throw new InvalidOperationException($"the crowd and the fighters are {people} people but the buffer holds {_buffer.count}");
             UpdateFrustum(camera);
             Vector3 eye = camera.transform.position;
-            _frame.Build(sim, _frustum, eye.x, eye.z, alpha, time, dt, near, far);
+            _frame.Build(sim, _frustum, eye.x, eye.z, alpha, time, dt, near, far, fighters);
 
             DrawCalls = 0;
             if (_frame.Total == 0) return;

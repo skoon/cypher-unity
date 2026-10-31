@@ -1,3 +1,84 @@
+# Milestone 5 — task checklist (branch `m5`, to be cut from `m4` once M4 is committed)
+
+Plan: `implementation_plan_m5.md` (approved 2026-10-29: encounters plus street patrols, two kinds (gunner, heavy), two gigs plus Data Core guards, Trauma Team, people scatter, procedural rig).
+
+- [x] 1. Combat rules (2026-10-29): `Core/Combat/EnemyTable` (gunner: 110 HP, armour 10, head x2, 6 a hit in bursts of 3-6; heavy: 320 HP, armour 60, head x3, 22 a hit,
+      1-2 shots), `DamageModel` (the player's shot = gun damage x charge x ranged damage x crit x head, less armour by the RPG's rule; an enemy's hit chance from accuracy,
+      distance, the target's speed and crouch, aim settling), `EnemyVitals`; `RpgCore.CombatKill` / `PlayerDamage` (the prototype's documented, never-sent `combat:kill` and
+      `player:damage`); `RpgService.Kill`, `HurtPlayer`, `Shooter`. All numbers first guesses: a new character needs 9 SMG hits on a gunner, 2 revolver; 35 SMG body / 12 head
+      / 8 revolver on a heavy; a lone gunner at 15 m takes ~27 s to kill a standing new character, a heavy at 8 m ~13 s (pinned in `DamageModelTests`). Tests: DamageModelTests 7,
+      RpgWorldTests +3, RpgServicePlayTests +1. Verified: 1,737 fast loop, 1,878 EditMode, RpgServicePlayTests 8/8 (full PlayMode not rerun: the step adds code nothing else calls).
+- [x] 2. Enemy brain (2026-10-29): `Core/Combat/EnemySim` (Idle/patrol -> Suspicious -> Engaged -> Searching -> Idle, Down). Sight: range + cone (gunner 45 m / 60 deg, heavy
+      40 m / 50 deg), 2.5 m all round, clear line from eye to eye (`IEnemyWorld.Clear`); awareness builds faster close in (about 0.4 s at 5 m, 0.9 s at 35 m, slower crouched)
+      and fades unseen; a glimpse makes it suspicious (turns, walks over, gives up after 6 s). Hearing: gunshots within 55 m. A hit engages at once. Fighting: reaction time, then
+      bursts (shots rolled by `DamageModel.EnemyHitChance`, settling aim), squad turns (at most half the living in a burst), call-outs to the squad within 40 m after 0.5-1 s,
+      keeps its preferred range (the heavy pushes in, the gunner holds ~16 m, backs off when too close), pushes to the last-seen place after 1.5 s unseen, searches after 8 s,
+      gives up after 10 s. Movement is straight-line for now (no walls, no cover: step 3). Seeded: the same seed plays the same fight. Tests: EnemySimTests 15.
+      Verified: 1,752 fast loop, 1,893 EditMode.
+- [x] 3. Cover, movement, spawns, patrols (2026-10-29). `CoverMap` from the props' colliders (0.8 m up; low under 1.4 m: crouch and stand to shoot; tall: step out round
+      the end) and building corners (the whole city: 4,832 points, 1,316 low, in 7 ms; `Find` wants cover that faces the danger, hides the crouched/standing eye, has a clear
+      peek, near the preferred range). `EnemyPaths` (A* on the pavement graph; walk straight where `IEnemyWorld.Walkable`, cut corners 4 times a second). `EnemySim`: stable ids,
+      `Remove(squad)`, the gunner fights from cover (stands up 0.25 s, bursts, moves on after 3-6 bursts or when flanked, skips the spot it leaves), patrols neutral until
+      provoked (1.5 s within 3 m, aimed at 1 s within 30 m, a shot within 25 m, hit) - the whole squad turns. `EncounterDirector` (spawn within 75 m, despawn beyond
+      120 m unless fighting, cleared said once and never back, save-cleared skipped). `PatrolDirector` (2 squads of 2-3, a heavy 1 in 4, out of sight 80-130 m, beat of 10
+      nodes and back, leave beyond 160 m unless fighting, bodies cleared after 20 s, 30 s before the next). My calls: the same 2 patrols on every tier (gameplay, not graphics);
+      a part-killed encounter that despawns comes back fresh. Bugs found by tests: a burst from low cover fired while still crouched and was cut off (now stands first); a
+      gunner "moving on" took the cover it left. Tests: EnemyCoverTests 18. Verified: 1,770 fast loop, 1,911 EditMode.
+- [x] 4. Bodies (2026-10-30). `PedestrianPose` (C# reference) and `PedestrianPose.hlsl` gain aim (with pitch), recoil, crouch (feet stay down, eye ~0.96 m),
+  flinch (with side), and a fall onto the back (cheap LODs squash and tip too); all zero for civilians, so the prototype goldens still match. Rig parts 14–16: SMG, revolver,
+  visor (three boxes each; full rig 790 tris). GPU record 80 → 112 bytes (fields d, e). `PedestrianPose.HitShape`: allocation-free body capsule + head sphere, matched
+  to the joints. `EnemyBodies`/`CombatBody`/`EnemyLook`: one body per enemy, eases aim/crouch, recoil on shots, flinch on health drops, fall over 0.85 s; gang look
+  (dark reds, red-orange trim, visor; heavy broad). `CrowdFrame`/`CrowdRenderer`/`CrowdController.Fighters`: fighters in the crowd's runs, no extra draws (buffer
+  400+24). `ShotTarget.Enemy`, `EnemyHitbox`, `EnemyProxies` (24 capsule+head pairs, dead parked). Blob shadow follows a lying body. Probe test covers armed states;
+  line-up shots in `Logs/shots_m5_bodies/`. Crouch lean eased 0.5 → 0.3 after the side shot.
+- [x] 5. The fight in Unity: EnemyController, enemy shots, hits, rewards, HUD hit arcs and health bar, Trauma Team (2026-10-30).
+  - [x] Core: `RpgCore.TraumaTeam` (10% of eddies, full health, "rpg:traumaTeam"), `EncounterDirector.Reset`/`PatrolDirector.Reset`, `DamageArcs`, `EnemyShots` (FightRulesTests).
+  - [x] New assembly `Cypher.Fight`: `EnemyController` (60 Hz sim, physics line of sight, player shots through `DamageModel`, kills through `RpgService.Kill`,
+        enemy tracers/flashes/impacts, flatline -> 3.5 s -> Trauma Team at Doc Vey's, every squad cleared). `WeaponSystem` shots name the enemy and head; `Suppressed`.
+  - [x] `FightHud` (hit arcs, aimed enemy's name and health bar, flatline screen), `EnemyGunAudio` (muzzle, impact, near-miss crack).
+  - [x] FightPlayTests (4). Fight and FighterBodies play tests unload the scene in teardown (the left-over scene broke FirstPersonControllerTests).
+  - [x] Fast loop 1813, EditMode 1959/1959, PlayMode 382/382.
+  - [x] Allocation test is flaky (5–16 KB "walking and firing" across runs; spikes of 130–540 KB a frame from audio clips created during the measurement, present with the fight off). User chose to leave the test as is (2026-10-30).
+- [x] 6. Quickhacks on enemies through the scanner (2026-10-30; plan `implementation_plan_m5_step6.md`).
+  - [x] Core: `HackEffects` runs the deck's hacks on `enemy:<id>` targets.
+        Ping reveals the squad. Reboot Optics blinds. Overheat burns on its own clock (one tick as it lands, then every 0.5 s).
+        Short Circuit strikes at once. Contagion burns and jumps within its spread each second. Cyberpsychosis makes the target berserk.
+        Damage scales by hackStrength. The loud hacks provoke the squad; Ping and Reboot Optics don't.
+        A hack on the dead or the gone comes off the deck.
+  - [x] Core: `EnemySim` gets Blind, Revealed and Berserk, and shot events name their `Victim`.
+        A berserk fights its nearest squadmate, and its squad fights back. When it ends they turn back on the player.
+  - [x] `RpgCore.HackDiscount` (ICEPICK) is exposed. `ScanModel.Enemy` contacts are tagged ahead of everything else.
+  - [x] `EnemyController`: holding F lowers the gun and picks the target (nearest the crosshair, within hackRange, in view or pinged).
+        The mouse wheel or `SelectHack` cycles the deck, skipping empty slots, and Fire calls `UploadHack`.
+        Hack kills and infighting kills pay as the player's. Hacks are cleared on Begin, End and a flatline.
+  - [x] `FightHud`: the deck panel (pick, RAM costs, unaffordable greyed, target), ping markers through walls, and the hack names under the health bar.
+        Audio: ui.confirm on upload, ui.error on refusal, weapon.energy where a Short Circuit lands.
+  - [x] Tests: HackEffectsTests (11), a ScanModel enemy test, HackPlayTests (6).
+        Fast loop 1825, EditMode 1971/1971, PlayMode 388/388.
+- [x] 7. People scatter from gunfights (2026-10-31).
+  - [x] Core: `CrowdSim.Alarm(x, z, radius)`: people within the radius flee for `FleeSeconds` (7 s, ±20%) at `FleeRun` (2.4×) their walking pace, along the pavements.
+        At each node they pick the way away from the shots. Anyone walking towards the shots turns back.
+        A second shot restarts the run from the newer shot. When the run ends they hurry, then walk. Recycled people start calm.
+        Nothing changes until an alarm sounds, and the prototype goldens still pass.
+  - [x] `EnemyController`: every shot (the player's, and each enemy's from its eye) raises `Alarm` with `ScatterRadius` 35 m. The cars carry on.
+  - [x] Tests: CrowdFleeTests (6) and the FightPlayTests scatter test. Fast loop 1831, EditMode 1977/1977, PlayMode 388/389.
+  - [ ] Flaky: IntegrationPlayTests' 90 s walk was "held up" 17.1 s in the full suite (limit 13.5). Run alone it passed at 9.5 and 3.8 s.
+        No shots or alarms happened in that run. Suspect: street patrols (step 5) whose solid volumes stand in the pilot's way. Not yet confirmed.
+- [x] 8. Content: two gigs, Data Core guards, encounters (2026-10-30; plan `implementation_plan_m5_step8.md`: guards required, survivors only, gigs as drafted).
+  - [x] `RpgGameContent`: the prototype's jobs and conversations (left as they are, so the goldens still replay them) with M5's added.
+        *Jackal Season* (Kaz, level 2, after the main job is taken): 5 Rust Jackals at the garage.
+        *Protection* (Marlene, level 3): 3 collectors at the pawn shop, who only arrive while you are 40 m or more away.
+        The Data Core guards: "Deal with the Data Core's guards" (kill 4 `corpsec`) joins *Ghost in the Rain*'s breach stage.
+        Rewards are first guesses: 600 XP / 2 cred / 1,800 €$ and 500 XP / 1 cred / 1,400 €$ + Marlene's counter prices.
+  - [x] Objectives can wait on others in their stage (`after`, ours). The Data Core's breach waits on the guards, and until then E does nothing there.
+  - [x] `EncounterContent` places each encounter's people on clear pavement round its place: nearest first, 3 m apart, clear of walls and props.
+        `EncounterDirector` adds a `When` condition (a job stage), `ArriveBeyond`, and survivors only: the fallen stay down after a despawn, a flatline and a load (flag `encounter.down.<id>`).
+  - [x] `RpgService` builds its core with the game content. `EnemyController` builds the encounters (`Encounters` still overrides) and asks `When` once per RPG change.
+  - [x] Not done as drafted: Protection's datashard is only in the lines, not an item, so the item table stays the prototype's.
+  - [x] Tests: EncounterContentTests (11). FightRulesTests reset now expects survivors only. EncounterPlayTests (2). MainJobPlayTests clears the guards through the sim first.
+        Fast loop 1842, EditMode 1988/1988, PlayMode 391/391 (the integration walk and the allocation test passed this run).
+- [ ] 9. Integration and Gate D (combat route).
+
 # Milestone 4 — task checklist (branch `m4`)
 
 Plan: `implementation_plan_m4.md` (approved 2026-10-27: guns mark hits only, a marker in the world at each place, one autosave slot plus Save in the pause menu).

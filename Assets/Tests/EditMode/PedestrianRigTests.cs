@@ -65,7 +65,7 @@ namespace Cypher.Tests
         public void TheFullBodyHasEveryPartAndTheCheapOnesOnlyOneRigidPart()
         {
             var parts = Enumerable.Range(0, Full.VertexCount).Select(i => (int)Full.Uv1[i * 4]).Distinct().OrderBy(x => x).ToList();
-            CollectionAssert.AreEqual(Enumerable.Range(1, 13).ToList(), parts, "every part from the long torso to the right shin, and not the static one");
+            CollectionAssert.AreEqual(Enumerable.Range(1, 16).ToList(), parts, "every part from the long torso to the visor, and not the static one");
             foreach (RigPart part in Enum.GetValues(typeof(RigPart)).Cast<RigPart>().Where(p => p != RigPart.Static))
             {
                 Assert.Greater(Triangles(Full, part).Count(), 0, part.ToString());
@@ -92,6 +92,9 @@ namespace Cypher.Tests
             Assert.AreEqual(11, (int)RigPart.ShinL);
             Assert.AreEqual(12, (int)RigPart.ThighR);
             Assert.AreEqual(13, (int)RigPart.ShinR);
+            Assert.AreEqual(14, (int)RigPart.GunSmg);
+            Assert.AreEqual(15, (int)RigPart.GunRevolver);
+            Assert.AreEqual(16, (int)RigPart.Visor);
         }
 
         [Test]

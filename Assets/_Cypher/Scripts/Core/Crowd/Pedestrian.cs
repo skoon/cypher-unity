@@ -73,6 +73,11 @@ namespace Cypher.Core
         /// <summary>How far the head is turned, smoothed by the renderer.</summary>
         public double LookYaw;
 
+        /// <summary>Running from a gunfight (<see cref="CrowdSim.Alarm"/>): for how much longer, and from where.</summary>
+        public double FleeTimer, FleeX, FleeZ;
+
+        public bool Fleeing => FleeTimer > 0;
+
         public double LookSeed;
 
         public PedestrianAppearance Appearance;

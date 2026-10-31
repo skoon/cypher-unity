@@ -31,8 +31,19 @@ namespace Cypher.UI
         string _promptLabel;
         readonly List<(double Bearing, bool Tracked)> _pips = new List<(double, bool)>();
         GunHud _gun;
+        FightHud _fight;
 
         public VisualElement Root { get; }
+
+        /// <summary>The hit arcs, the enemy health bar and the flatline screen; null in a scene without fights.</summary>
+        public FightHud Fight => _fight;
+
+        public void AttachFight(Cypher.Fight.EnemyController enemies)
+        {
+            _fight = new FightHud(enemies);
+            Root.Insert(Root.IndexOf(_damage) + 1, _fight.Root);
+            UiFonts.Apply(_fight.Root);
+        }
 
         /// <summary>The notices showing now, newest first; for tests.</summary>
         public IReadOnlyList<HudToast> Notices => _toastModel.Visible(Time.unscaledTimeAsDouble);
@@ -92,7 +103,11 @@ namespace Cypher.UI
         /// <summary>What the interact key is called now (it can be rebound).</summary>
         public void SetInteractKey(Func<string> key) => _interactKey = key ?? (() => "E");
 
-        public void Detach() => _rpg.Event -= OnEvent;
+        public void Detach()
+        {
+            _rpg.Event -= OnEvent;
+            _fight?.Detach();
+        }
 
         /// <summary>The interact key was rebound: the prompt is written again on the next frame.</summary>
         public void KeyChanged() => _promptLabel = null;
@@ -134,6 +149,7 @@ namespace Cypher.UI
             }
 
             _gun?.Update(camera, dt, Root.resolvedStyle.height);
+            _fight?.Update(Root, camera, player, yaw, dt, core);
 
             _hurt = Math.Max(0, _hurt - dt * 1.6);
             _damage.style.opacity = (float)Math.Min(1, _hurt);

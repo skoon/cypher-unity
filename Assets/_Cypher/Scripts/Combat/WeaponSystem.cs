@@ -18,9 +18,15 @@ namespace Cypher.Combat
         public readonly ShotTarget Target;
         public readonly ImpactSurface Surface;
 
-        public ShotResult(WeaponShot shot, bool hit, Vector3 origin, Vector3 direction, Vector3 point, Vector3 normal, Vector3 muzzle, float distance, ShotTarget target, ImpactSurface surface)
+        /// <summary>For a hit on an enemy: which one (its id; -1 otherwise), and whether on the head.</summary>
+        public readonly int Enemy;
+        public readonly bool Head;
+
+        public ShotResult(WeaponShot shot, bool hit, Vector3 origin, Vector3 direction, Vector3 point, Vector3 normal, Vector3 muzzle, float distance, ShotTarget target, ImpactSurface surface,
+            int enemy = -1, bool head = false)
         {
             Shot = shot; Hit = hit; Origin = origin; Direction = direction; Point = point; Normal = normal; Muzzle = muzzle; Distance = distance; Target = target; Surface = surface;
+            Enemy = enemy; Head = head;
         }
     }
 
@@ -66,6 +72,9 @@ namespace Cypher.Combat
         /// The benchmark's trigger (<c>--benchmark-fire</c>): held on <see cref="BenchmarkFire"/>'s clock of play, with the reserve topped up so a long run never goes dry.
         /// </summary>
         public bool ScriptedFire { get; set; }
+
+        /// <summary>Holds the gun still, as a menu does (the player is flatlined).</summary>
+        public bool Suppressed { get; set; }
 
         /// <summary>Every shot traced, as it happens (the sounds and the HUD listen).</summary>
         public event Action<ShotResult> Shot;
@@ -123,7 +132,7 @@ namespace Cypher.Combat
             }
         }
 
-        bool Acting => flow.State == FlowState.Playing && flow.Modal == FlowModal.None;
+        bool Acting => flow.State == FlowState.Playing && flow.Modal == FlowModal.None && !Suppressed;
 
         WeaponBody Body()
         {
@@ -241,15 +250,23 @@ namespace Cypher.Combat
 
             ShotTarget target = ShotTarget.World;
             ImpactSurface surface = ImpactSurface.Concrete;
+            int enemy = -1;
+            bool head = false;
             if (hit)
             {
                 target = ShotSurface.Of(h.collider);
+                EnemyHitbox box = target == ShotTarget.Enemy ? EnemyHitbox.Of(h.collider) : null;
+                if (box != null)
+                {
+                    enemy = box.Enemy;
+                    head = box.Head;
+                }
                 surface = ImpactSim.SurfaceFor(target, cfg.Mode == FireMode.Charge, h.normal.y, h.point.y);
                 double energy = Math.Max(0.25, Math.Min(1.4, shot.Power * (cfg.Damage / 70)));
                 _fx.Impact(V(h.point), V(h.normal), surface, energy, player.transform.position.y);
-                _rig.RegisterHit(target == ShotTarget.Person, target == ShotTarget.Prop || target == ShotTarget.Vehicle);
+                _rig.RegisterHit(target == ShotTarget.Person || target == ShotTarget.Enemy, target == ShotTarget.Prop || target == ShotTarget.Vehicle);
             }
-            var result = new ShotResult(shot, hit, origin, dir, end, hit ? h.normal : Vector3.zero, muzzle, hit ? h.distance : (float)cfg.Range, target, surface);
+            var result = new ShotResult(shot, hit, origin, dir, end, hit ? h.normal : Vector3.zero, muzzle, hit ? h.distance : (float)cfg.Range, target, surface, enemy, head);
             _shots.Add(result);
             Shot?.Invoke(result);
         }

@@ -9,7 +9,8 @@
         "Cypher.City",
         "Cypher.Actors",
         "Cypher.Audio",
-        "Cypher.Rendering"
+        "Cypher.Rendering",
+        "Cypher.Fight"
     ],
     "includePlatforms": [
         "Editor"

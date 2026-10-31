@@ -128,6 +128,8 @@ namespace Cypher.UI
                 t.Card.style.top = -boxH / 2;
                 t.Root.EnableInClassList("cy-tag--place", c.Kind == ScanKind.Place);
                 t.Root.EnableInClassList("cy-tag--vehicle", c.Kind == ScanKind.Vehicle);
+                t.Root.EnableInClassList("cy-tag--enemy", c.Kind == ScanKind.Enemy);
+                t.Root.EnableInClassList("cy-tag--target", c.Kind == ScanKind.Enemy && c.Action.Length > 0);
                 t.Name.text = c.Name;
                 t.Sub.text = c.Sub;
                 t.Action.text = c.Action;
