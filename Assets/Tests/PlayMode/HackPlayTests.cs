@@ -214,7 +214,9 @@ namespace Cypher.Tests
                     Assert.AreSame(mate, Fight.HackTarget, "pinged: hackable through the wall");
 
                     Rpg.Core.Deck.Active.Clear();   // the ping wears off
-                    yield return Frames(3);
+                    // the marks change on the fight's fixed step, which can come after the HUD in a frame: wait for it, then a frame for the HUD
+                    for (int i = 0; i < 300 && mate.Revealed; i++) yield return null;
+                    yield return Frames(2);
                     Assert.IsFalse(mate.Revealed);
                     Assert.IsNull(Fight.HackTarget, "not pinged, not seen");
                     Assert.AreEqual(0, Ui.Hud.Fight.PingsShown);

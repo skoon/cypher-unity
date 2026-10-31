@@ -367,6 +367,37 @@ powershell -File tools/unity-check.ps1 -Step Player
 powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Repeats 1 -Fire
 ```
 
+## Gate D (Milestone 5, step 9, 2026-10-31)
+
+**Gate D: Gate C's run with a fight all the way round, p99 at most 33.3 ms. Passed at Medium and Ultra, one run each, both with 20% headroom.** Raw data in `benchmarks/gate-d-2026-10-31/`.
+
+**How it was measured.** As Gate C (street route, one 160 s lap after a 10 s warm-up, Development player, 1080p window, 540p internal, adaptive off, vsync off, everything on, CPU 6% and 7% before
+the runs, the pilot firing 3 s of every 10 s), plus `--benchmark-fight`: a squad of five (a heavy and four gunners, `BenchmarkSquad`) is placed 25 to 35 m ahead of the pilot on clear pavement, made hostile and kept
+in the fight (shot at by the pilot every 3 s); when the pilot leaves it 50 m behind it is taken away and a new one placed ahead. Their shots hurt the pilot, who is healed below half health so the lap is not
+cut short; the pilot's shots alert them but do no harm, so the five stay standing. Street patrols and the city's own encounters run as usual. Both runs: 5.2 / 5.1 enemies engaged on average (7 at most), about
+400 enemy shots each, 33 waypoints reached.
+
+| | Medium | Ultra | Gate C after the allocation fix: Medium / Ultra |
+|---|---|---|---|
+| FPS avg / p50 / p95 / **p99** / worst ms | 86.7 / 11.3 / 14.0 / **15.8** / 37.2 | 70.4 / 14.1 / 16.9 / **18.9** / 30.4 | 86.0, p99 16.0 / 70.4, p99 19.4 |
+| Frames over 33.3 ms | 1 | 0 | 0 / 0 |
+| Headroom under the gate (p99) | 53% | 43% | 52% / 42% |
+| CPU / GPU ms avg | 11.5 / 10.2 | 14.2 / 13.0 | |
+| Draw calls avg / max, triangles avg | 333 / 708, 386 k | 349 / 579, 564 k | |
+| Main-thread allocation per frame; frames with a collection | 11.4 KB; 20 | 13.1 KB; 18 | 9.8 KB; 17 / 11.3 KB; 16 |
+
+The fight costs nothing measurable on the frame: p99 is within run-to-run noise of Gate C. The five add ~1.7 KB a frame of allocation (the Editor's `AllocationPlayTests`: 6.8 KB a frame firing with five
+fighting, against 5.0 KB firing alone; budget 10 KB). The large single frames are not the fight's: the 1.3 MB frame at ~93 s (`alloc_kb_max`) and ~60 frames of 200 to 550 KB, one every few seconds,
+are in Gate C's run too (55 such frames, the same 1.3 MB at 93.6 s); not chased. The one Medium frame over budget (37 ms at 158.8 s) allocated 7.6 KB and had no collection.
+
+**What this does not say.** One run per tier; Performance, Low and High not run; the junction route not run. The benchmark's five cannot die, so bodies, loot drops and the flatline are not in the
+measurement (they are in the PlayMode tests and the shots in `docs/shots/shots_m5_gate_d/`). Quickhacks are not used by the pilot.
+
+```
+powershell -File tools/unity-check.ps1 -Step Player
+powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Fight -Repeats 1
+```
+
 ## Startup and the flow (Milestone 2, step 3, 2026-10-20)
 
 A normal launch of the Development player on this machine (1280x720 window): the engine is up and Boot ends at 4.4 s, loading

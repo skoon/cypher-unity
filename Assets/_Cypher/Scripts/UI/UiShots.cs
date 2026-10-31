@@ -23,7 +23,7 @@ namespace Cypher.UI
         /// <summary>Time for fades, layout and focus to settle before each picture.</summary>
         const float SettleSeconds = 0.45f;
 
-        const float WatchdogSeconds = 240f;
+        const float WatchdogSeconds = 300f;
 
         [SerializeField] UiRoot ui;
         [SerializeField] GameFlow flow;
@@ -299,6 +299,128 @@ namespace Cypher.UI
             guns.Step(new WeaponInput { Acting = true }, still);
             yield return ShotNow("11t_rail_fire");
             yield return new WaitForSecondsRealtime(0.5f);
+
+            guns.Step(new WeaponInput { Acting = true, Select = 1 }, still);
+            for (int i = 0; i < 50; i++)
+            {
+                guns.Step(new WeaponInput { Acting = true }, still);
+                yield return null;
+            }
+            yield return FightShots(rpg);
+        }
+
+        /// <summary>
+        /// A fight on the plaza: five in cover ahead, fire coming in (tracers, hit arcs), the health bar over the one aimed at, the hack deck with a target, the squad
+        /// pinged, a Short Circuit landing, one of them down, the flatline screen and waking at Doc Vey's.
+        /// </summary>
+        IEnumerator FightShots(RpgService rpg)
+        {
+            var fight = FindAnyObjectByType<Cypher.Fight.EnemyController>() ?? throw new InvalidOperationException("the shots need the fights");
+            RpgCore core = rpg.Core;
+            Transform player = rpg.Player.transform;
+            fight.PatrolsOn = false;
+            fight.Patrols.Reset();
+            void KeepStanding() => core.Heal(core.Derived["maxHealth"]);
+            void LookAt(Vector3 target)
+            {
+                Vector3 eye = Camera.main.transform.position, d = target - eye;
+                rpg.Player.Look.Set(Math.Atan2(d.x, d.z), Math.Atan2(d.y, Math.Sqrt(d.x * d.x + d.z * d.z)));
+            }
+            Vector3 Chest(Enemy e) => new Vector3((float)e.Position.X, (float)e.Position.Y + Cypher.Fight.EnemyController.ChestHeight, (float)e.Position.Z);
+
+            // five facing the player across the plaza
+            Vector3 forward = new Vector3(player.forward.x, 0, player.forward.z).normalized, right = Vector3.Cross(Vector3.up, forward);
+            Vector3 feet = player.position;
+            var members = new (EnemyArchetype, Vector3)[5];
+            for (int m = 0; m < 5; m++) members[m] = (m == 0 ? EnemyTable.Heavy : EnemyTable.Gunner, feet + forward * (m == 0 ? 11f : 14f) + right * ((m - 2) * 3f));
+            EnemySquad squad = fight.Spawn("shots", members, yaw: rpg.Player.Look.Yaw + Math.PI, hostile: true);
+            Enemy heavy = squad.All[0];
+            for (float t = 0; t < 2.5f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                yield return null;
+            }
+            yield return ShotNow("11u_fight_squad");
+
+            bool hit = false;
+            Action<Vector3, double> onHit = (from, damage) => hit = true;
+            fight.PlayerHit += onHit;
+            yield return WaitFor(() =>
+            {
+                KeepStanding();
+                return hit;
+            }, "a shot to hit the player");
+            fight.PlayerHit -= onHit;
+            yield return ShotNow("11v_fight_incoming");
+
+            Enemy aimed = squad.All[1];
+            for (float t = 0; t < 0.6f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                LookAt(Chest(aimed));
+                yield return null;
+            }
+            yield return ShotNow("11w_fight_health_bar");
+
+            for (int i = 0; i < core.Inventory.DeckSize; i++) core.Inventory.UnequipHack(i);
+            string[] hacks = { "qh_ping", "qh_short_circuit" };
+            for (int i = 0; i < hacks.Length; i++)
+            {
+                RpgResult given = core.GiveItem(hacks[i]);
+                if (!given.Ok) throw new InvalidOperationException($"the shots could not give {hacks[i]}: {given.Reason}");
+                Item item = given.Item ?? core.Inventory.Items.Last(it => it.TemplateId == hacks[i]);
+                if (!core.Inventory.EquipHack(item.Uid, i).Ok) throw new InvalidOperationException($"the shots could not slot {hacks[i]}");
+            }
+            core.Deck.SetMaxRam(40);
+            core.Deck.Fill();
+            InputSystem.QueueStateEvent(_keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState(Key.F));
+            for (float t = 0; t < 0.6f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                LookAt(Chest(heavy));
+                yield return null;
+            }
+            yield return ShotNow("11x_fight_deck");
+            RpgResult ping = fight.UploadHack();
+            if (!ping.Ok) throw new InvalidOperationException($"the shots' Ping did not go: {ping.Reason}");
+            fight.SelectHack(1);
+            for (float t = 0; t < 0.3f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                LookAt(Chest(heavy));
+                yield return null;
+            }
+            RpgResult shock = fight.UploadHack();
+            if (!shock.Ok) throw new InvalidOperationException($"the shots' Short Circuit did not go: {shock.Reason}");
+            yield return null;
+            yield return ShotNow("11y_fight_short_circuit");
+            InputSystem.QueueStateEvent(_keyboard, new UnityEngine.InputSystem.LowLevel.KeyboardState());
+
+            rpg.Player.Look.Set(rpg.Player.Look.Yaw + 0.6, 0);
+            for (float t = 0; t < 0.8f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                yield return null;
+            }
+            yield return ShotNow("11z_fight_pinged");
+
+            Enemy fallen = squad.All[2];
+            fight.Sim.Harm(fallen, 1e6);
+            rpg.Kill(fallen.Archetype, fallen.Squad.Tag, new Vector3((float)fallen.Position.X, (float)fallen.Position.Y, (float)fallen.Position.Z));
+            for (float t = 0; t < 1.4f; t += Time.unscaledDeltaTime)
+            {
+                KeepStanding();
+                LookAt(new Vector3((float)fallen.Position.X, (float)fallen.Position.Y + 0.3f, (float)fallen.Position.Z));
+                yield return null;
+            }
+            yield return ShotNow("11z1_fight_body_down");
+
+            rpg.HurtPlayer(1e6, "shots");
+            yield return new WaitForSecondsRealtime(1.2f);
+            yield return ShotNow("11z2_flatline");
+            yield return WaitFor(() => !fight.Downed, "the Trauma Team");
+            yield return new WaitForSecondsRealtime(0.6f);
+            yield return Shot("11z3_trauma_team");
         }
 
         /// <summary>A picture this frame, without waiting for things to settle (a muzzle flash lasts a few frames).</summary>

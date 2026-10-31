@@ -10,10 +10,26 @@ namespace Cypher.Actors
     /// What a shot can hit on the enemies: for every living fighter (at any distance, not just the nearest few as the crowd has), a capsule from the legs to the shoulders
     /// and a sphere on the head, posed as the body is (<see cref="PedestrianPose.HitShape"/>: crouched behind cover, flinching), each a kinematic body marked as an
     /// <see cref="ShotTarget.Enemy"/> with an <see cref="EnemyHitbox"/> naming the enemy. The dead are not targets: their volumes go back to wait far below the city.
+    /// They are on their own layer (<see cref="LayerName"/>), which collides with nothing: shots and sight lines are rays and still find them, but the player walks
+    /// through them as they walk through the player (the sim moves them, not physics).
     /// </summary>
     public sealed class EnemyProxies : IDisposable
     {
         public const int Count = EnemyBodies.Max;
+
+        /// <summary>The project's layer for the volumes (ProjectSettings/TagManager.asset).</summary>
+        public const string LayerName = "Enemy";
+
+        /// <summary>The volumes' layer; throws when the project does not have it.</summary>
+        public static int Layer
+        {
+            get
+            {
+                int layer = LayerMask.NameToLayer(LayerName);
+                if (layer < 0) throw new InvalidOperationException($"the project has no '{LayerName}' layer (ProjectSettings/TagManager.asset)");
+                return layer;
+            }
+        }
 
         readonly GameObject[] _objects = new GameObject[Count * 2];
         readonly Rigidbody[] _bodies = new Rigidbody[Count * 2];
@@ -26,6 +42,8 @@ namespace Cypher.Actors
 
         public EnemyProxies(Transform parent)
         {
+            int layer = Layer;
+            for (int other = 0; other < 32; other++) Physics.IgnoreLayerCollision(layer, other, true);
             for (int i = 0; i < Count; i++)
             {
                 _capsules[i] = Make(i * 2, $"EnemyBody_{i}", parent, false).AddComponent<CapsuleCollider>();
@@ -36,7 +54,7 @@ namespace Cypher.Actors
 
         GameObject Make(int slot, string name, Transform parent, bool head)
         {
-            var go = new GameObject(name);
+            var go = new GameObject(name) { layer = Layer };
             if (parent != null) go.transform.SetParent(parent, false);
             var body = go.AddComponent<Rigidbody>();
             body.isKinematic = true;

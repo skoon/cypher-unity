@@ -9,6 +9,7 @@ using Cypher.Audio;
 using Cypher.City;
 using Cypher.Combat;
 using Cypher.Core;
+using Cypher.Fight;
 using Cypher.Game;
 using Cypher.Perf;
 using Cypher.Player;
@@ -17,6 +18,7 @@ using Cypher.Rpg;
 using Cypher.UI;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 
 namespace Cypher.Tests
@@ -50,6 +52,7 @@ namespace Cypher.Tests
         static RpgService Rpg => UnityEngine.Object.FindFirstObjectByType<RpgService>();
         static UiRoot Ui => UnityEngine.Object.FindFirstObjectByType<UiRoot>();
         static WeaponSystem Guns => UnityEngine.Object.FindFirstObjectByType<WeaponSystem>();
+        static EnemyController Fight => UnityEngine.Object.FindFirstObjectByType<EnemyController>();
 
         static IEnumerator Seconds(float s)
         {
@@ -119,6 +122,8 @@ namespace Cypher.Tests
                 Assert.IsTrue(game == 1 ? SliceTestScene.Flow.NewGame() : SliceTestScene.Flow.Continue(), "game " + game);
                 yield return Seconds(1.0f);
                 Assert.AreEqual(0, Guns.Effects.Live().Decals, "game " + game + ": no holes left from the game before");
+                Assert.AreEqual(0, Guns.Effects.Live().Tracers, "game " + game + ": no tracers left from the game before's fight");
+                Assert.AreEqual(0, Guns.Effects.Live().Lights, "game " + game + ": no muzzle flashes left from it");
                 IPlayerCommandSource own = Player.CommandSource;
                 WalkTheStreets();
                 yield return Seconds(7.0f);
@@ -128,6 +133,7 @@ namespace Cypher.Tests
                 Assert.Greater(Crowd.Sim.Active.Count, 0);
                 Assert.Greater(Traffic.Sim.Vehicles.Count, 0);
                 yield return PlayALittle(game, own);
+                yield return FightALittle(game);
 
                 Assert.IsTrue(SliceTestScene.Flow.Pause(), "game " + game);
                 Assert.IsNull(SliceTestScene.Flow.SaveGame(), "game " + game + " saves");
@@ -140,6 +146,9 @@ namespace Cypher.Tests
                 Assert.IsFalse(Sound.WorldRunning, "game " + game + ": the world's sound is gone");
                 Assert.IsNull(Rpg.Core, "game " + game + ": no RPG behind the title");
                 Assert.IsFalse(Guns.Drawn, "game " + game + ": the gun is put away");
+                Assert.IsFalse(Fight.IsActive, "game " + game + ": no fights behind the title");
+                Assert.AreEqual(0, Fight.Proxies.Leased, "game " + game + ": every enemy volume parked");
+                Assert.IsNull(Crowd.Fighters, "game " + game + ": no fighters drawn");
                 Assert.IsNull(Sound.Master.Failure);
                 yield return Seconds(1.5f);   // the last menu sound and any tail
                 Assert.AreEqual(0, Sound.Voices.Active, "game " + game + ": every voice was given back");
@@ -186,6 +195,80 @@ namespace Cypher.Tests
             Guns.Step(new WeaponInput { Acting = true }, new WeaponBody { Grounded = true });
             Assert.Greater(Guns.Effects.Live().Decals, 0, "game " + game + ": the shots left holes");
             yield return Seconds(1.0f);
+        }
+
+        /// <summary>
+        /// A fight in each game: the Jackals at the garage (the gig taken in the first game and carried on by the save, so each game has one fewer), shots both ways,
+        /// a Ping, and one of them down.
+        /// </summary>
+        static IEnumerator FightALittle(int game)
+        {
+            const string gig = "q_gig_jackals", encounter = "enc_garage_jackals";
+            if (!Rpg.Core.Quests.IsActive(gig))
+            {
+                Assert.AreEqual(1, game, "the gig carries on in the save");
+                Assert.IsTrue(Rpg.Core.Quests.Start(gig, force: true).Ok);
+                for (int guard = 0; guard < 10 && Rpg.Core.Quests.GetState(gig).Stage != "s_clear"; guard++)
+                {
+                    JsonObject open = ((List<object>)Rpg.Core.Quests.Snapshot(gig)["objectives"]).Cast<JsonObject>().First(o => !(bool)o["done"]);
+                    Assert.IsTrue(Rpg.Core.Quests.CompleteObjective(gig, (string)open["id"]).Ok);
+                }
+            }
+            Assert.AreEqual("s_clear", Rpg.Core.Quests.GetState(gig).Stage, "game " + game);
+            RpgLocation garage = Rpg.Core.GetLocation("garage");
+            Player.Teleport(new Vector3((float)garage.X, Player.transform.position.y, (float)garage.Z), 0f);
+            Physics.SyncTransforms();
+            EnemySquad jackals = null;
+            float until = Time.realtimeSinceStartup + 5f;
+            while ((jackals = Fight.EncounterDirector.Live(encounter)) == null && Time.realtimeSinceStartup < until) yield return null;
+            Assert.IsNotNull(jackals, "game " + game + ": the Jackals are at the garage");
+            Assert.AreEqual(6 - game, jackals.All.Count, "game " + game + ": the survivors of the games before");
+
+            int hitsTaken = 0;
+            Action<Vector3, double> taken = (from, d) => hitsTaken++;
+            Fight.PlayerHit += taken;
+            using (var input = new VirtualInput())
+            {
+                Enemy first = jackals.All[0];
+                Vector3 chest = new Vector3((float)first.Position.X, (float)first.Position.Y + EnemyController.ChestHeight, (float)first.Position.Z), eye = Camera.main.transform.position;
+                Player.Look.Set(Math.Atan2(chest.x - eye.x, chest.z - eye.z), Math.Atan2(chest.y - eye.y, Vector2.Distance(new Vector2(chest.x, chest.z), new Vector2(eye.x, eye.z))));
+                RpgResult given = Rpg.Core.GiveItem("qh_ping");
+                Assert.IsTrue(given.Ok, given.Reason);
+                Item ping = given.Item ?? Rpg.Core.Inventory.Items.Last(it => it.TemplateId == "qh_ping");
+                Rpg.Core.Inventory.UnequipHack(0);
+                Assert.IsTrue(Rpg.Core.Inventory.EquipHack(ping.Uid, 0).Ok);
+                Rpg.Core.Deck.Fill();
+                input.Hold(Key.F);
+                yield return null;
+                yield return null;
+                yield return null;
+                if (Fight.HackTarget != null) Assert.IsTrue(Fight.UploadHack().Ok, "game " + game + ": a Ping");
+                input.Release(Key.F);
+                yield return null;
+
+                // a short burst (a few rounds: not enough to kill, so each game leaves one fewer than the last), then their answer
+                for (int i = 0; i < 20; i++)
+                {
+                    Guns.Step(new WeaponInput { Acting = true, FireHeld = true }, new WeaponBody { Grounded = true });
+                    yield return null;
+                }
+                Guns.Step(new WeaponInput { Acting = true }, new WeaponBody { Grounded = true });
+                until = Time.realtimeSinceStartup + 8f;
+                while (hitsTaken == 0 && Time.realtimeSinceStartup < until)
+                {
+                    Rpg.Core.Heal(Rpg.Core.Derived["maxHealth"]);
+                    yield return null;
+                }
+            }
+            Fight.PlayerHit -= taken;
+            Assert.Greater(hitsTaken, 0, "game " + game + ": they fired back");
+
+            Enemy down = jackals.All.First(e => e.State != EnemyState.Down);
+            Assert.IsTrue(Fight.Sim.Harm(down, 1e6));
+            Rpg.Kill(down.Archetype, down.Squad.Tag, new Vector3((float)down.Position.X, (float)down.Position.Y, (float)down.Position.Z));
+            yield return Seconds(0.5f);
+            Rpg.Core.Heal(Rpg.Core.Derived["maxHealth"]);
+            Assert.IsFalse(Fight.Downed, "game " + game);
         }
 
         // ---------------------------------------------------------------- the tier changes under it all
@@ -303,12 +386,24 @@ namespace Cypher.Tests
             float start = Time.realtimeSinceStartup;
             Vector3 last = Player.transform.position;
             double walked = 0;
-            int checks = 0;
+            int checks = 0, detours = 0;
+            var blockers = new List<string>();
+            var near = new Collider[16];
             while (Time.realtimeSinceStartup - start < 90f)
             {
                 Vector3 p = Player.transform.position;
                 walked += Vector3.Distance(p, last);
                 last = p;
+                if (pilot.Detours != detours)
+                {
+                    // held up: what is in front of the walker
+                    detours = pilot.Detours;
+                    Vector3 ahead = p + Player.transform.forward * 0.6f;
+                    int n = Physics.OverlapCapsuleNonAlloc(ahead + Vector3.up * 0.4f, ahead + Vector3.up * 1.5f, 0.45f, near, ~0, QueryTriggerInteraction.Ignore);
+                    var what = new List<string>();
+                    for (int i = 0; i < n; i++) if (near[i] != Player.Controller) what.Add(near[i].name);
+                    blockers.Add($"{Time.realtimeSinceStartup - start:0.0} s at ({p.x:0},{p.z:0}): {(what.Count > 0 ? string.Join(", ", what) : "nothing in front")}");
+                }
                 if (checks++ % 30 == 0)
                 {
                     Assert.IsFalse(float.IsNaN(p.x) || float.IsNaN(p.y) || float.IsNaN(p.z), "the player's position");
@@ -328,7 +423,8 @@ namespace Cypher.Tests
             }
 
             Debug.Log($"[Cypher] integration: 90 s on the street route at Ultra: {walked:0} m walked, {pilot.WaypointsReached} waypoints, held up {pilot.StalledSeconds:0.0} s in {pilot.Detours} detours; " +
-                      $"{Crowd.Sim.Active.Count} people, {Traffic.Sim.Vehicles.Count} vehicles, {Traffic.Sim.Airborne.Count} aircraft, {Sound.Status()}");
+                      $"{Crowd.Sim.Active.Count} people, {Traffic.Sim.Vehicles.Count} vehicles, {Traffic.Sim.Airborne.Count} aircraft, {Sound.Status()}" +
+                      (blockers.Count > 0 ? "; held up by:\n  " + string.Join("\n  ", blockers) : ""));
             Assert.Less(pilot.StalledSeconds, 0.15 * 90, "held up for no more than the benchmark allows");
             Assert.GreaterOrEqual(pilot.WaypointsReached, 12, "and well round the route");
             Assert.Greater(walked, 150, "on its own two feet");

@@ -5,6 +5,7 @@
 #   powershell -File tools/gate-b.ps1 -Route junction -Repeats 1 -Seconds 90
 #   powershell -File tools/gate-b.ps1 -Tiers Medium,High -Repeats 2
 #   powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Fire          (Gate C: the same with the pilot firing the gun in bursts)
+#   powershell -File tools/gate-b.ps1 -Tiers Medium,Ultra -Fight         (Gate D: firing, with a squad of five fighting the pilot all the way round)
 #   powershell -File tools/gate-b.ps1 -ReportFrom D:\somewhere\gate-b-xyz      (just print the table for runs already made)
 #
 # Before each run it waits until the machine is quiet (CPU under -QuietPercent for -QuietSeconds in a row) and gives up after -QuietTimeoutSeconds rather than measure a busy machine.
@@ -28,6 +29,7 @@ param(
     [string]$ReportFrom = '',
     [switch]$NoAudio,
     [switch]$Fire,
+    [switch]$Fight,
     [switch]$AllowStalePlayer
 )
 $ErrorActionPreference = 'Stop'
@@ -37,6 +39,8 @@ $Tiers = @($Tiers | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 foreach ($t in $Tiers) { if ($t -notin 'Performance', 'Low', 'Medium', 'High', 'Ultra') { throw "Unknown tier '$t'" } }
 if (-not $PlayerDir) { $PlayerDir = Join-Path $project 'Builds\Dev' }
 $logs = Join-Path $env:TEMP 'cypher-unity'
+if ($Fight) { $Fire = $true }   # a fight is fought with the gun
+$gate = if ($Fight) { 'D' } elseif ($Fire) { 'C' } else { 'B' }
 
 function Read-Summary([string]$Dir) {
     $file = Join-Path $Dir 'benchmark_summary.txt'
@@ -75,10 +79,11 @@ function Write-Table([string]$Root) {
             Over = Num $h 'frames_over_budget'; Gpu = Num $h 'gpu_avg_ms'; Cpu = Num $h 'cpu_avg_ms'; Draws = Num $h 'draw_calls_avg'
             People = Num $h 'people_drawn_avg'; Cars = Num $h 'vehicles_drawn_avg'; Metres = Num $h 'distance_m'; Held = Num $h 'stalled_s'
             AllocKb = Num $h 'alloc_kb_avg'; Gc = Num $h 'gc_frames'; AudioShare = Num $h 'audio_thread_share_avg'; Launch = Num $h 'launch_to_play_s'
+            Foes = Num $h 'enemies_engaged_avg'
         }
     }
     if ($rows.Count -eq 0) { Write-Host "No runs in $Root"; return }
-    $rows | Format-Table Run, Tier, Result, Fps, P99, Worst, Over, Gpu, Cpu, Draws, People, Cars, Metres, Held, AllocKb, Gc, Launch -AutoSize | Out-String -Width 220 | Write-Host
+    $rows | Format-Table Run, Tier, Result, Fps, P99, Worst, Over, Gpu, Cpu, Draws, People, Cars, Foes, Metres, Held, AllocKb, Gc, Launch -AutoSize | Out-String -Width 230 | Write-Host
 
     $limit = $GateMs * (1 - $Headroom)
     $summary = foreach ($g in $rows | Group-Object Tier) {
@@ -116,10 +121,10 @@ if ($newest.LastWriteTime -gt $built -and -not $AllowStalePlayer) {
     throw "The player ($built) is older than $($newest.FullName) ($($newest.LastWriteTime)): run unity-check.ps1 -Step Player first (or pass -AllowStalePlayer)"
 }
 
-if (-not $OutDir) { $OutDir = Join-Path $logs ($(if ($Fire) { 'gate-c-' } else { 'gate-b-' }) + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+if (-not $OutDir) { $OutDir = Join-Path $logs ("gate-$($gate.ToLower())-" + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 if ($Seconds -le 0) { $Seconds = switch ($Route) { 'street' { 160 } 'junction' { 90 } 'city' { 240 } default { 60 } } }
-Write-Host "Gate $(if ($Fire) { 'C' } else { 'B' }): $Route route$(if ($Fire) { ', firing' }), $($Tiers -join ', '), $Repeats runs each, $WarmupSeconds s warm-up + $Seconds s recorded; results in $OutDir"
+Write-Host "Gate ${gate}: $Route route$(if ($Fire) { ', firing' })$(if ($Fight) { ', a squad fighting' }), $($Tiers -join ', '), $Repeats runs each, $WarmupSeconds s warm-up + $Seconds s recorded; results in $OutDir"
 
 function Wait-Quiet {
     $deadline = (Get-Date).AddSeconds($QuietTimeoutSeconds)
@@ -143,6 +148,7 @@ for ($r = 1; $r -le $Repeats; $r++) {
             '-Width', $Width, '-Height', $Height, '-PlayerDir', $PlayerDir, '-BenchmarkDir', $dir)
         if ($NoAudio) { $a += '-NoAudio' }
         if ($Fire) { $a += '-Fire' }
+        if ($Fight) { $a += '-Fight' }
         & powershell @a | Out-Null
         $log = Join-Path $logs 'player.log'
         if (Test-Path $log) { Copy-Item $log (Join-Path $dir 'player.log') -Force }

@@ -35,11 +35,12 @@ namespace Cypher.Fight
     /// them for <see cref="DownSeconds"/>, and the Trauma Team takes them to Doc Vey's for a tenth of their eddies; every fight is cleared away (the set encounters come back with their survivors).
     /// Quickhacks: while the scanner is held the gun is lowered, the enemy nearest the crosshair within hack range (and in view, or pinged) is the target, the mouse
     /// wheel picks a hack from the deck and Fire uploads it (<see cref="HackEffects"/> does what it does). Every shot, the player's or theirs, scatters the people
-    /// within <see cref="ScatterRadius"/>.
+    /// within <see cref="ScatterRadius"/>. With <see cref="BenchmarkFight"/> (<c>--benchmark-fight</c>) a <see cref="BenchmarkSquad"/> fights the player all the way,
+    /// and neither side dies of it.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(35)]   // after the player moves, before the guns (40) fire and the crowd (40) draws the bodies
-    public sealed class EnemyController : MonoBehaviour
+    public sealed class EnemyController : MonoBehaviour, IBenchmarkCounters
     {
         public const double StepSeconds = 1.0 / 60;
         public const int MaxStepsPerFrame = 4;
@@ -87,9 +88,11 @@ namespace Cypher.Fight
         (int, int) _wantedAt = (-1, -1);
         HackEffects _hacks;
         readonly List<Enemy> _hackKills = new List<Enemy>();
+        BenchmarkSquad _benchmark;
         double _accumulator, _time;
         float _downFor;
         bool _subscribed, _pending;
+        int _shotsCounting, _shotsLastFrame;
 
         /// <summary>Set before a game starts to replace the content's encounters (<see cref="RpgGameContent.EncountersJson"/>); null for the content's.</summary>
         public IReadOnlyList<EncounterDef> Encounters { get; set; }
@@ -99,6 +102,15 @@ namespace Cypher.Fight
 
         /// <summary>Whether street patrols come and go (tests switch them off to have the street to themselves).</summary>
         public bool PatrolsOn { get; set; } = true;
+
+        /// <summary>
+        /// Gate D's fight (<c>--benchmark-fight</c>, or set by a test): a <see cref="BenchmarkSquad"/> kept in front of the player, fighting. The player's shots strike
+        /// it without harm, and the player is patched up whenever below half health, so the fight lasts the whole run.
+        /// </summary>
+        public bool BenchmarkFight { get; set; }
+
+        /// <summary>The benchmark's squad while a game runs (whether or not <see cref="BenchmarkFight"/> is on).</summary>
+        public BenchmarkSquad BenchmarkSquad => _benchmark;
 
         public EnemySim Sim => _sim;
         public EnemyBodies Bodies => _bodies;
@@ -168,6 +180,7 @@ namespace Cypher.Fight
             guns.Shot += OnPlayerShot;
             rpg.Event += OnRpgEvent;
             _subscribed = true;
+            BenchmarkFight |= BenchmarkOptions.Parse(Environment.GetCommandLineArgs()).Fight;
         }
 
         void OnDestroy()
@@ -217,6 +230,7 @@ namespace Cypher.Fight
             _wantedAt = (-1, -1);
             _encounters = new EncounterDirector(_sim, _defs, id => _clearedInSave.Contains(id), rpg.EncounterDown, Wanted);
             _patrols = new PatrolDirector(_sim, _paths, Seed ^ 0x51u, "street");
+            _benchmark = new BenchmarkSquad(_sim, nav, boxes, buildings);
             _bodies = new EnemyBodies(Seed);
             _proxies = _proxies ?? new EnemyProxies(transform);
             _world = new PhysicsWorld(player, crowd, _proxies);
@@ -240,6 +254,7 @@ namespace Cypher.Fight
             _sim = null;
             _encounters = null;
             _patrols = null;
+            _benchmark = null;
             _bodies = null;
             if (rpg.Core != null) _hacks.Clear(rpg.Core.Deck.Active);
             _hacks = null;
@@ -277,6 +292,8 @@ namespace Cypher.Fight
                 _pending = false;
                 Begin();
             }
+            _shotsLastFrame = _shotsCounting;
+            _shotsCounting = 0;
             if (_sim == null) return;
             double dt = Time.deltaTime;
             if (Downed)
@@ -412,6 +429,7 @@ namespace Cypher.Fight
                 rpg.ClearEncounter(id);
             }
             if (PatrolsOn) _patrols.Step(StepSeconds, view.Eye, _world);
+            if (BenchmarkFight && view.Alive) _benchmark.Step(StepSeconds, view.Feet, view.Eye, player.Look.Yaw);
             if (Aimed != null && view.Alive) _sim.AimedAt(Aimed, view.Eye, StepSeconds);
             _hackKills.Clear();
             _hacks.Step(StepSeconds, rpg.Core.Deck.Active, rpg.Core.Derived["hackStrength"], _hackKills);
@@ -432,6 +450,7 @@ namespace Cypher.Fight
         {
             Enemy e = _sim.Find(ev.Enemy);
             if (e == null) return;
+            _shotsCounting++;
             crowd.Sim?.Alarm(ev.From.X, ev.From.Z, ScatterRadius);
             WeaponConfig gun = WeaponTable.Get(e.Archetype.WeaponId);
             Vector3 eye = U(ev.From), chest = U(ev.To);
@@ -448,6 +467,7 @@ namespace Cypher.Fight
             {
                 end = chest - aim * 0.6f;   // stops short of the eye
                 rpg.HurtPlayer(ev.Damage, e.Archetype.Id);
+                if (BenchmarkFight && rpg.Core.Health < rpg.Core.Derived["maxHealth"] / 2) rpg.Core.Heal(rpg.Core.Derived["maxHealth"]);
                 PlayerHit?.Invoke(eye, ev.Damage);
             }
             else
@@ -481,6 +501,11 @@ namespace Cypher.Fight
             if (r.Target != ShotTarget.Enemy || r.Enemy < 0) return;
             Enemy e = _sim.Find(r.Enemy);
             if (e == null || e.State == EnemyState.Down) return;
+            if (BenchmarkFight && e.Squad.Tag == BenchmarkSquad.Tag)
+            {
+                _sim.ShotAt(e, V(r.Origin));   // struck, not harmed: the benchmark's squad lasts the run
+                return;
+            }
             EnemyHit hit = DamageModel.PlayerShot(r.Shot.Weapon, r.Shot.Power, rpg.Shooter, e.Archetype, r.Head, _rng.Next());
             bool killed = _sim.Hit(e, hit, V(r.Origin));
             if (killed) rpg.Kill(e.Archetype, e.Squad.Tag, U(e.Position));
@@ -547,6 +572,36 @@ namespace Cypher.Fight
             SetDowned(false);
             Debug.Log($"[Cypher] fights: flatlined; the Trauma Team took {fee} eddies");
             Revived?.Invoke(fee);
+        }
+
+        // ------------------------------------------------------------ what the benchmark reads each frame
+
+        public int CounterCount => 3;
+
+        public string CounterName(int index)
+        {
+            switch (index)
+            {
+                case 0: return "enemies_alive";
+                case 1: return "enemies_engaged";
+                case 2: return "enemy_shots";
+                default: throw new ArgumentOutOfRangeException(nameof(index), index, "three counters");
+            }
+        }
+
+        public double Counter(int index)
+        {
+            if (index == 2) return _shotsLastFrame;
+            if (index != 0 && index != 1) throw new ArgumentOutOfRangeException(nameof(index), index, "three counters");
+            if (_sim == null) return 0;
+            int n = 0;
+            IReadOnlyList<Enemy> all = _sim.Enemies;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].State == EnemyState.Down) continue;
+                if (index == 0 || all[i].State == EnemyState.Engaged) n++;
+            }
+            return n;
         }
 
         static Vector3 U(V3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);

@@ -62,7 +62,7 @@ Plan: `implementation_plan_m5.md` (approved 2026-10-29: encounters plus street p
         Nothing changes until an alarm sounds, and the prototype goldens still pass.
   - [x] `EnemyController`: every shot (the player's, and each enemy's from its eye) raises `Alarm` with `ScatterRadius` 35 m. The cars carry on.
   - [x] Tests: CrowdFleeTests (6) and the FightPlayTests scatter test. Fast loop 1831, EditMode 1977/1977, PlayMode 388/389.
-  - [ ] Flaky: IntegrationPlayTests' 90 s walk was "held up" 17.1 s in the full suite (limit 13.5). Run alone it passed at 9.5 and 3.8 s.
+  - [x] Flaky (closed in step 9): IntegrationPlayTests' 90 s walk was "held up" 17.1 s in the full suite (limit 13.5). Run alone it passed at 9.5 and 3.8 s.
         No shots or alarms happened in that run. Suspect: street patrols (step 5) whose solid volumes stand in the pilot's way. Not yet confirmed.
 - [x] 8. Content: two gigs, Data Core guards, encounters (2026-10-30; plan `implementation_plan_m5_step8.md`: guards required, survivors only, gigs as drafted).
   - [x] `RpgGameContent`: the prototype's jobs and conversations (left as they are, so the goldens still replay them) with M5's added.
@@ -77,7 +77,18 @@ Plan: `implementation_plan_m5.md` (approved 2026-10-29: encounters plus street p
   - [x] Not done as drafted: Protection's datashard is only in the lines, not an item, so the item table stays the prototype's.
   - [x] Tests: EncounterContentTests (11). FightRulesTests reset now expects survivors only. EncounterPlayTests (2). MainJobPlayTests clears the guards through the sim first.
         Fast loop 1842, EditMode 1988/1988, PlayMode 391/391 (the integration walk and the allocation test passed this run).
-- [ ] 9. Integration and Gate D (combat route).
+- [x] 9. Integration and Gate D (combat route) (2026-10-31; plan `implementation_plan_m5_step9.md`: the squad follows the pilot, enemy volumes don't block).
+  - [x] `BenchmarkSquad` (Core): five hostiles placed 25 to 35 m ahead of the walker on clear pavement, kept in the fight, replaced ahead when left 50 m behind.
+        `--benchmark-fight` (`BenchmarkOptions.Fight`, implies `--benchmark-fire`); `EnemyController` runs it, keeps the pilot above half health, and the pilot's shots only alert the five.
+        Counters `enemies_alive`, `enemies_engaged`, `enemy_shots` in the benchmark CSV and summary; `gate-b.ps1 -Fight` names the run Gate D and adds a Foes column.
+  - [x] Enemy hit volumes on a new `Enemy` layer with no collisions: the player walks through enemies; shots and sight lines still find them.
+  - [x] Tests: BenchmarkSquadTests (7), FightPilotPlayTests (3: the Jackal gig cleared with the gun and two hacks, the benchmark fight, walking through a volume),
+        IntegrationPlayTests fights a little in each game (the census still matches), AllocationPlayTests measures five fighting (6.8 KB a frame, under 10 KB).
+        HackPlayTests' ping test now waits for the fight's step instead of 3 frames (it failed once in the full suite).
+        Fast loop 1850, EditMode 1996/1996, PlayMode 394/394.
+  - [x] The 90 s walk flake: since the volumes stopped blocking, the walk was held up 3.8 s in 2 detours, by a prop and chunk geometry, not enemies. Closed.
+  - [x] Shots in `docs/shots/shots_m5_gate_d/` (11u to 11z3: the squad, incoming fire, the health bar, the deck, short circuit, ping, a body, flatline, trauma team).
+  - [x] **Gate D passed**: Medium p99 15.8 ms, Ultra 18.9 ms, both with 20% headroom (`docs/performance_results.md`, `benchmarks/gate-d-2026-10-31/`).
 
 # Milestone 4 — task checklist (branch `m4`)
 
@@ -472,6 +483,8 @@ without it the output is the 960x540 internal image. Scene and materials come fr
   template ships it off, which silently stops realtime probes rendering). `StreetReflectionProbe.Capture()` throws if
   it is off. The URP asset already had probe blending, box projection and the probe atlas on, in Forward+; the game
   and the capture tool never modify it (the runtime clone in `LowResController` is a copy).
+- `ProjectSettings/TagManager.asset` (M5 step 9): **layer 8 named `Enemy`** for the enemies' hit volumes. `EnemyProxies` turns off its collisions with every
+  layer, so the player walks through enemies; rays (shots, sight lines) still find them. `EnemyProxies.Layer` throws if the layer is missing.
 
 ## Menus
 
@@ -543,6 +556,23 @@ first frame appears about 4.4 s after the process starts.
 
 Not verified: how mouse-look feels with a real mouse and display (the benchmark supplies look input directly), a
 release player, IL2CPP, other hardware, sessions beyond 160 s. See `performance_results.md`.
+
+## Fit and finish
+
+- [ ] 1. Motorcycles need handlebars; the riders' hands hang in the air.
+- [ ] 2. Enemies look the same as the other pedestrians: design a new look for them.
+- [ ] 3. Task locations are often in strange places; they should make more sense.
+- [ ] 4. The gun rides up too far when firing.
+- [ ] 5. Replace the weapons with the pre-rendered models the user found, instead of the procedural ones.
+- [ ] 6. Driving sounds are too loud.
+- [ ] 7. Vehicle turns are not smooth.
+- [ ] 8. The quickhack deck sits over the scanner's "OPTICAL SCAN" footer and target line while F is held (seen in `docs/shots/shots_m5_gate_d/11x_fight_deck.png`).
+- [ ] 9. Clothing's armour rating (`armorRating`, 2–20 a piece) should add to the player's armour. Today only affixes count, as in the prototype (it rolls the stat and never reads it).
+      Needs a scale (five pieces could add 60+ armour) and is a deliberate break from the prototype's numbers, so the RPG goldens must allow for it.
+- [ ] 10. Weapon items should drive the gun in hand: their damage, rate of fire and accuracy feeding the Wasp, Magnat or Voltline, or choosing which is held. Today the three fixed guns are
+      always used and only a weapon item's affixes apply.
+- [ ] 11. The Data Core guards (a heavy and three gunners, `enc_datacore_guards`) are too hard: about 20 damage a second in the open against ~140 HP. Ease it, for example one gunner fewer
+      or less armour on the heavy (60, which takes 37.5% off each Wasp hit).
 
 ## Resolved blocker (2026-10-19 → 2026-10-20)
 

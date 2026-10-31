@@ -78,6 +78,23 @@ namespace Cypher.Tests
             yield return Measure("everything, firing", 120, rows);
             Debug.Log($"[Cypher] allocation: while firing, {Find<EnemyController>().Sim.Enemies.Count(e => e.Squad.Hostile)} hostile enemies");
             EnemyController fight = Find<EnemyController>();
+
+            // Gate D's worst case: five fighting back all the way
+            fight.BenchmarkFight = true;
+            int shots = 0;
+            Action<EnemyShotFx> counted = fx => shots++;
+            fight.EnemyFired += counted;
+            // measured once they are in the fight and shooting (the squad coming is a one-off, not a frame of the fight)
+            for (float until = Time.time + 20f; Time.time < until && shots == 0;) yield return null;
+            Assert.Greater(shots, 0, "the five began firing within 20 s");
+            shots = 0;
+            yield return Measure("firing, five fighting", 600, rows);   // their fire comes in bursts, with lulls round corners and while the next squad comes
+            fight.EnemyFired -= counted;
+            Debug.Log($"[Cypher] allocation: with the benchmark's squad, {fight.Counter(1)} engaged, {shots} enemy shots in the measurement");
+            Assert.Greater(shots, 0, "the five were firing during the measurement");
+            fight.BenchmarkFight = false;
+            fight.BenchmarkSquad.Reset();
+
             fight.PatrolsOn = false;
             fight.Patrols.Reset();
             yield return Measure("firing, no patrols", 120, rows);
@@ -103,6 +120,7 @@ namespace Cypher.Tests
             // before the HUD and the markers kept their views it was 43 KB a frame (a collection every two seconds); the budget catches a return to that
             Assert.Less(rows[0].Item2, BudgetBytes, "walking, all on");
             Assert.Less(rows[1].Item2, BudgetBytes, "walking and firing, all on");
+            Assert.Less(rows[2].Item2, BudgetBytes, "walking and firing with five fighting back");
         }
     }
 }

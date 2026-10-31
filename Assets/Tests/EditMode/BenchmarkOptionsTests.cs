@@ -157,6 +157,17 @@ namespace Cypher.Tests
         }
 
         [Test]
+        public void AFightOnlyWhenAskedAndThenThePilotFiresToo()
+        {
+            BenchmarkOptions none = BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-fire" });
+            Assert.IsFalse(none.Fight);
+            BenchmarkOptions fight = BenchmarkOptions.Parse(new[] { "--benchmark", "--benchmark-route", "street", "--benchmark-fight" });
+            Assert.IsTrue(fight.Fight);
+            Assert.IsTrue(fight.Fire, "a fight is fought with the gun");
+            Assert.Throws<ArgumentException>(() => BenchmarkOptions.Parse(new[] { "--benchmark-fight" }), "a fight needs the benchmark");
+        }
+
+        [Test]
         public void TheTriggerIsHeldForThreeSecondsOfEveryTen()
         {
             Assert.IsTrue(BenchmarkFire.Holding(0));

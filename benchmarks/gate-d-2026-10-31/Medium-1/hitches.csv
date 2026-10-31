@@ -1,0 +1,2 @@
+time_s,frame_ms,cpu_ms,gpu_ms,x,z,alloc_bytes,gc
+158.762,37.242,17.698,15.696,0.01,25.10,7644,0

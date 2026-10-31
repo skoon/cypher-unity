@@ -23,6 +23,7 @@ namespace Cypher.Core
     /// <summary>
     /// Command-line switches for the player's benchmark mode:
     ///   --benchmark [--benchmark-out DIR] [--benchmark-seconds N] [--benchmark-warmup N] [--benchmark-quality PRESET] [--benchmark-route centre|city|street|junction]
+    ///   [--benchmark-fire] [--benchmark-fight]
     /// Anything else on the command line (Unity's own -screen-width and friends) is ignored; a malformed
     /// benchmark switch throws, so a typo cannot silently turn into a different measurement.
     /// </summary>
@@ -35,6 +36,7 @@ namespace Cypher.Core
         public const string QualityFlag = "--benchmark-quality";
         public const string RouteFlag = "--benchmark-route";
         public const string FireFlag = "--benchmark-fire";
+        public const string FightFlag = "--benchmark-fight";
 
         public const double DefaultWarmupSeconds = 10;
         public const double DefaultDurationSeconds = 60;
@@ -77,8 +79,11 @@ namespace Cypher.Core
         /// <summary>The pilot fires the gun in bursts as it walks (<see cref="BenchmarkFire"/>): Gate C's worst case.</summary>
         public bool Fire { get; }
 
+        /// <summary>A squad the size of the largest encounter fights the pilot all the way round (<see cref="BenchmarkSquad"/>), and the pilot fires: Gate D's worst case.</summary>
+        public bool Fight { get; }
+
         public BenchmarkOptions(bool enabled, string outputDirectory = null, double warmupSeconds = DefaultWarmupSeconds, double durationSeconds = DefaultDurationSeconds, QualityPreset? quality = null, BenchmarkRoute route = BenchmarkRoute.Centre,
-            bool fire = false)
+            bool fire = false, bool fight = false)
         {
             if (!(warmupSeconds >= 0) || double.IsInfinity(warmupSeconds)) throw new ArgumentOutOfRangeException(nameof(warmupSeconds), warmupSeconds, "warm-up must be finite and >= 0");
             if (!(durationSeconds > 0) || double.IsInfinity(durationSeconds)) throw new ArgumentOutOfRangeException(nameof(durationSeconds), durationSeconds, "duration must be finite and > 0");
@@ -88,7 +93,8 @@ namespace Cypher.Core
             DurationSeconds = durationSeconds;
             Quality = quality;
             Route = route;
-            Fire = fire;
+            Fire = fire || fight;
+            Fight = fight;
         }
 
         public static BenchmarkOptions Disabled { get; } = new BenchmarkOptions(false);
@@ -106,6 +112,7 @@ namespace Cypher.Core
             QualityPreset? quality = null;
             BenchmarkRoute route = BenchmarkRoute.Centre;
             bool fire = false;
+            bool fight = false;
 
             for (int i = 0; i < args.Count; i++)
             {
@@ -139,12 +146,16 @@ namespace Cypher.Core
                         fire = true;
                         anyValue = true;
                         break;
+                    case FightFlag:
+                        fight = true;
+                        anyValue = true;
+                        break;
                 }
             }
 
-            if (!enabled && anyValue) throw new ArgumentException($"{OutFlag}, {SecondsFlag}, {WarmupFlag}, {QualityFlag}, {RouteFlag} and {FireFlag} only make sense with {BenchmarkFlag}");
+            if (!enabled && anyValue) throw new ArgumentException($"{OutFlag}, {SecondsFlag}, {WarmupFlag}, {QualityFlag}, {RouteFlag}, {FireFlag} and {FightFlag} only make sense with {BenchmarkFlag}");
             if (!durationGiven) duration = DefaultDuration(route);
-            return enabled ? new BenchmarkOptions(true, outDir, warmup, duration, quality, route, fire) : Disabled;
+            return enabled ? new BenchmarkOptions(true, outDir, warmup, duration, quality, route, fire, fight) : Disabled;
         }
 
         static string Value(IReadOnlyList<string> args, ref int i)
